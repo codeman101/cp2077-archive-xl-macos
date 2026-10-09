@@ -1,6 +1,7 @@
 #include "MacCrashDiag.hpp"
 #include "MacExit.hpp"
 #include "MacDiag.hpp"
+#include "MacV1Natives.hpp"
 
 #include "App/Application.hpp"
 #include "App/Project.hpp"
@@ -42,6 +43,9 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
 
             g_app = Core::MakeUnique<App::Application>(&g_moduleAnchor, aHandle, aSdk);
             g_app->Bootstrap();
+#if defined(CP2077_MAC_V1)
+            Mac::V1::AddNativeRegistrationCallback("axl");
+#endif
             MAC_DIAG("[axl] Main load root=%s module=%s\n", Core::Runtime::GetRootDir().string().c_str(),
                      Core::Runtime::GetModuleDir().string().c_str());
             break;

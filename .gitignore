@@ -19,3 +19,6 @@ CMakeLists.txt
 macos/build/
 *.rej
 *.orig
+
+# macOS port: the CMake build of the Mac plugin is source (upstream generates CMakeLists.txt from xmake)
+!macos/CMakeLists.txt
