@@ -16,7 +16,10 @@ struct std::hash<RED4ext::TweakDBID>
 {
     std::size_t operator()(RED4ext::TweakDBID aKey) const
     {
-        return aKey.value;
+        // Hash only what operator== compares (name hash and length), not the TweakDB value offset the game caches in
+        // the top 24 bits: equal IDs must hash equally, or an ID taken from game memory (a record field, a hook
+        // argument) is not found among the IDs the plugin made itself. Same as TweakXL's specialization.
+        return aKey.value & 0xFFFFFFFFFFull;
     }
 };
 

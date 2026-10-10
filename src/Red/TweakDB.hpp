@@ -7,6 +7,13 @@ inline T* GetFlatPtr(TweakDBID aFlatID)
 {
     auto tweakDB = Red::TweakDB::Get();
 
+    // An ID that comes from game memory (a record field, a hook argument) can carry the offset the game caches in
+    // bytes 5 to 7 of the ID (Mac 0x9C8520 = Windows 0x3F1CAC fill it in and revalidate it against the version byte
+    // at TweakDB+0x160). That offset points at the VALUE of the flat, while TweakDB::GetFlatValue takes an offset in
+    // an ID for the offset of a FlatValue and reads a vtable from it. Look the flat up by name hash and length only,
+    // like the game's own slow path.
+    aFlatID = TweakDBID(aFlatID.name.hash, aFlatID.name.length);
+
     std::shared_lock _(tweakDB->mutex00);
 
     auto* flatValue = tweakDB->GetFlatValue(aFlatID);
