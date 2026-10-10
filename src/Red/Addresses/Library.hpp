@@ -22,6 +22,11 @@ constexpr uint32_t AppearanceChangeSystem_ChangeAppearance2 = 386815609;
 constexpr uint32_t AppearanceDefinition_ExtractPartComponents = 39206067;
 
 constexpr uint32_t AppearanceNameVisualTagsPreset_GetVisualTags = 1186798404;
+#ifdef __APPLE__
+// macOS-only entry (no Windows hash: the Windows twin is a wrapper that tail-calls GetVisualTags). Synthetic id 0xC0DE1006;
+// the database row needs it (Mac 0x3CD7118, twin of Windows 0x3F12F0).
+constexpr uint32_t AppearanceNameVisualTagsPreset_GetVisualTagsByRecord = 3235778566;
+#endif
 
 constexpr uint32_t AppearanceResource_PostLoad = 3141736993;
 constexpr uint32_t AppearanceResource_FindAppearanceDefinition = 549398675;

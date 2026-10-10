@@ -48,6 +48,9 @@ bool App::GarmentExtension::Load()
     Hook<Raw::AppearanceChanger::GetSuffixes>(&OnResolveSuffixes).OrThrow();
     HookAfter<Raw::AppearanceNameVisualTagsPreset::GetVisualTags>(&OnGetVisualTags).OrThrow();
 #ifdef __APPLE__
+    HookAfter<Raw::AppearanceNameVisualTagsPreset::GetVisualTagsByRecord>(&OnGetVisualTagsByRecord).OrThrow();
+#endif
+#ifdef __APPLE__
     HookAfter<Raw::GarmentAssembler::FindState>(&OnFindStateResult).OrThrow();
 #else
     HookAfter<Raw::GarmentAssembler::FindState>(&OnFindState).OrThrow();
@@ -91,6 +94,9 @@ bool App::GarmentExtension::Unload()
     Unhook<Raw::AppearanceResource::FindAppearance>();
     Unhook<Raw::AppearanceChanger::GetSuffixes>();
     Unhook<Raw::AppearanceNameVisualTagsPreset::GetVisualTags>();
+#ifdef __APPLE__
+    Unhook<Raw::AppearanceNameVisualTagsPreset::GetVisualTagsByRecord>();
+#endif
     Unhook<Raw::GarmentAssembler::FindState>();
     Unhook<Raw::GarmentAssemblerState::AddItem>();
     Unhook<Raw::GarmentAssemblerState::AddCustomItem>();
@@ -353,6 +359,49 @@ void* App::GarmentExtension::OnResolveSuffixes(Red::CString& aResult,
     }
 
     return Raw::AppearanceChanger::GetSuffixes(aResult, aOwner, aOwnerOverride, aItemRecord, aItemID);
+}
+#endif
+
+#ifdef __APPLE__
+namespace
+{
+// The flat that holds the entity path of a record. The TweakDBID field comes from game memory and carries the value
+// offset the game caches in its bytes 5 to 7 (Mac 0x9C8520, twin of Windows 0x3F1CAC, fills it in and revalidates it
+// against the version byte at id+9 = TweakDB+0x160). The hook below is a HookAfter, so the original has just refreshed
+// that cache: when the version byte matches, the value is at staticFlatDataBuffer + offset, exactly where the game
+// reads it. Otherwise the flat is looked up by name hash and length.
+const Red::ResourcePath* ResolveRecordFlatPath(const uint8_t* aField)
+{
+    auto* tweakDB = Red::TweakDB::Get();
+    if (!tweakDB)
+        return nullptr;
+
+    uint64_t raw = 0;
+    std::memcpy(&raw, aField, sizeof(raw));
+    const Red::TweakDBID field(raw);
+
+    if (aField[9] == tweakDB->unk160 && field.HasTDBOffset() && tweakDB->staticFlatDataBuffer)
+    {
+        return reinterpret_cast<const Red::ResourcePath*>(tweakDB->staticFlatDataBuffer +
+                                                          static_cast<uint32_t>(field.ToTDBOffset()));
+    }
+
+    return Red::GetFlatPtr<Red::ResourcePath>(Red::TweakDBID(field.name.hash, field.name.length));
+}
+}
+
+void App::GarmentExtension::OnGetVisualTagsByRecord(Red::AppearanceNameVisualTagsPreset* aPreset, const uint8_t* aRecord,
+                                                    Red::CName aAppearanceName, Red::TagList& aFinalTags)
+{
+    if (!aRecord)
+        return;
+
+    // The record names its entity path through the flat that its TweakDBID at +0xE4 points to (+0xE8 on Windows).
+    const auto* entityPath = ResolveRecordFlatPath(aRecord + 0xE4);
+    if (!entityPath)
+        return;
+
+    OnGetVisualTags(aPreset, *entityPath, aAppearanceName, aFinalTags);
 }
 #endif
 

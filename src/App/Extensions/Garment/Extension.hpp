@@ -54,6 +54,12 @@ private:
                                 Red::ResourcePath aEntityPath,
                                 Red::CName aAppearanceName,
                                 Red::TagList& aFinalTags);
+#ifdef __APPLE__
+    static void OnGetVisualTagsByRecord(Red::AppearanceNameVisualTagsPreset* aPreset,
+                                        const uint8_t* aRecord,
+                                        Red::CName aAppearanceName,
+                                        Red::TagList& aFinalTags);
+#endif
     static void OnFindState(uintptr_t, Red::GarmentAssemblerState* aState, Red::WeakHandle<Red::Entity>& aEntityWeak);
 #ifdef __APPLE__
     static void OnFindStateResult(Red::GarmentAssemblerState& aState, uintptr_t,
