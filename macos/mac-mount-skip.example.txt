@@ -1,0 +1,12 @@
+# mac-mount-skip.example.txt
+#
+# Copy this file next to ArchiveXL.dylib as "mac-mount-skip.txt" to keep archives out of the macOS mount.
+#
+# The Mac game does not mount archive/Mac/mod by itself, so ArchiveXL mounts every "*.archive" in that folder (ASCII order, first file wins,
+# ".archive.off" files are ignored). Put the file names of archives here that are ALREADY part of the official archives, for example
+# because the CP2077 Mac Archive Patcher baked them in, so that they are not mounted a second time and do not win over the baked copy.
+# One file name per line (no folder), exact spelling, '#' starts a comment. Each skipped archive is logged once; the ".xl" file next
+# to a skipped archive is still found and loaded.
+#
+# ExampleBakedMod.archive
+# Another Baked Mod 1.2.archive

@@ -16,3 +16,6 @@
 /tools/wkit/layout.xml
 __pycache__
 CMakeLists.txt
+macos/build/
+*.rej
+*.orig
