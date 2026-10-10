@@ -1,5 +1,12 @@
 #include "ExtensionLoader.hpp"
 #include "App/Utils/Str.hpp"
+#if defined(__APPLE__)
+#include "MacDepotDiag.hpp"
+#include "MacDiag.hpp"
+#include "Red/ResourceDepot.hpp"
+#include "App/Utils/MacProbe.hpp"
+#endif
+
 
 App::ExtensionLoader::ExtensionLoader(std::filesystem::path aBundleDir, std::wstring aConfigExt)
     : m_bundleDir(std::move(aBundleDir))
@@ -25,6 +32,10 @@ void App::ExtensionLoader::Configure()
 
         {
             auto depot = Red::ResourceDepot::Get();
+#if defined(__APPLE__)
+            Mac::DumpDepot(depot, "Configure");
+            App::MacProbe::Run("InitResourceDepot");
+#endif
 
             for (const auto& group : depot->groups | std::views::reverse)
             {
@@ -202,6 +213,9 @@ void App::ExtensionLoader::Load()
 
 void App::ExtensionLoader::OnDepotReady()
 {
+#if defined(__APPLE__)
+    App::MacProbe::Run("LoadGatheredResources");
+#endif
     if (!m_loaded)
         return;
 

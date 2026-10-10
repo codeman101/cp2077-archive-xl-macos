@@ -28,8 +28,13 @@ bool App::JournalExtension::Load()
     HookBefore<Raw::JournalTree::ProcessJournalIndex>(&JournalExtension::OnLoadJournal).OrThrow();
     HookBefore<Raw::JournalRootFolderEntry::Initialize>(&JournalExtension::OnInitializeRoot).OrThrow();
     HookAfter<Raw::MappinSystem::OnStreamingWorldLoaded>(&JournalExtension::OnMappinDataLoaded).OrThrow();
+#if defined(__APPLE__)
+    Hook<Raw::MappinSystem::FindMappinData>(&JournalExtension::OnFindMappinData).OrThrow();
+    Hook<Raw::MappinSystem::FindPoiData>(&JournalExtension::OnFindPoiData).OrThrow();
+#else
     Hook<Raw::MappinSystem::GetMappinData>(&JournalExtension::OnGetMappinData).OrThrow();
     Hook<Raw::MappinSystem::GetPoiData>(&JournalExtension::OnGetPoiData).OrThrow();
+#endif
 
     return true;
 }
@@ -39,8 +44,13 @@ bool App::JournalExtension::Unload()
     Unhook<Raw::JournalTree::ProcessJournalIndex>();
     Unhook<Raw::JournalRootFolderEntry::Initialize>();
     Unhook<Raw::MappinSystem::OnStreamingWorldLoaded>();
+#if defined(__APPLE__)
+    Unhook<Raw::MappinSystem::FindMappinData>();
+    Unhook<Raw::MappinSystem::FindPoiData>();
+#else
     Unhook<Raw::MappinSystem::GetMappinData>();
     Unhook<Raw::MappinSystem::GetPoiData>();
+#endif
 
     return true;
 }
@@ -141,11 +151,11 @@ void App::JournalExtension::OnMappinDataLoaded(void* aMappinSystem, Red::worldRu
     if (!cookedMappinResource->cookedData.IsEmpty() && cookedMappinResource->cookedData.Size() == cookedMappinResource->cookedData.Capacity())
     {
         {
-            const auto reserve = std::max(s_mappins.size() << 1, cookedMappinResource->cookedData.Size() / 2ull);
+            const auto reserve = std::max<size_t>(s_mappins.size() << 1, cookedMappinResource->cookedData.Size() / 2ull);
             cookedMappinResource->cookedData.Reserve(cookedMappinResource->cookedData.Size() + reserve);
         }
         {
-            const auto reserve = std::max(s_mappins.size() << 1, cookedMappinResource->cookedMultiData.Size() / 2ull);
+            const auto reserve = std::max<size_t>(s_mappins.size() << 1, cookedMappinResource->cookedMultiData.Size() / 2ull);
             cookedMappinResource->cookedMultiData.Reserve(cookedMappinResource->cookedMultiData.Size() + reserve);
         }
     }
@@ -153,10 +163,46 @@ void App::JournalExtension::OnMappinDataLoaded(void* aMappinSystem, Red::worldRu
     auto cookedPoiResource = Raw::MappinSystem::CookedPoiResource::Ptr(aMappinSystem)->instance;
     if (!cookedPoiResource->cookedData.IsEmpty() && cookedPoiResource->cookedData.Size() == cookedPoiResource->cookedData.Capacity())
     {
-        const auto reserve = std::max(s_mappins.size() << 1, cookedPoiResource->cookedData.Size() / 2ull);
+        const auto reserve = std::max<size_t>(s_mappins.size() << 1, cookedPoiResource->cookedData.Size() / 2ull);
         cookedPoiResource->cookedData.Reserve(cookedPoiResource->cookedData.Size() + reserve);
     }
 }
+
+#if defined(__APPLE__)
+// macOS (R22). The cooked resource arrives as the first argument; a journal mappin is resolved by the finder of its own kind.
+void* App::JournalExtension::OnFindMappinData(void* aResource, uint32_t aHash)
+{
+    auto result = Raw::MappinSystem::FindMappinData(aResource, aHash);
+
+    if (!result && aResource && !s_mappins.empty())
+    {
+        const auto it = s_mappins.find(aHash);
+        if (it != s_mappins.end() && !it.value().isPointOfInterest)
+        {
+            ResolveCookedMappin(aResource, aHash, it.value(), result);
+        }
+    }
+
+    return result;
+}
+
+void* App::JournalExtension::OnFindPoiData(void* aResource, uint32_t aHash)
+{
+    auto result = Raw::MappinSystem::FindPoiData(aResource, aHash);
+
+    if (!result && aResource && !s_mappins.empty())
+    {
+        const auto it = s_mappins.find(aHash);
+        if (it != s_mappins.end() && it.value().isPointOfInterest)
+        {
+            ResolveCookedMappin(aResource, aHash, it.value(), result);
+        }
+    }
+
+    return result;
+}
+
+#endif
 
 void* App::JournalExtension::OnGetMappinData(void* aMappinSystem, uint32_t aHash)
 {
@@ -217,7 +263,11 @@ void App::JournalExtension::ResolveCookedMappin(void* aMappinSystem, uint32_t aH
             cookedMappin.entityID.hash = aJournalMappin.reference.hash;
 
             std::unique_lock _(s_mappinsLock);
+#if defined(__APPLE__)
+            auto resource = static_cast<Red::gamePointOfInterestMappinResource*>(aMappinSystem); // the finder's resource argument
+#else
             auto resource = Raw::MappinSystem::CookedPoiResource::Ptr(aMappinSystem)->instance;
+#endif
             resource->cookedData.PushBack(std::move(cookedMappin));
 
             aCookedMappin = &resource->cookedData.Back();
@@ -234,7 +284,11 @@ void App::JournalExtension::ResolveCookedMappin(void* aMappinSystem, uint32_t aH
             cookedMappin.journalPathHash = aHash;
 
             std::unique_lock _(s_mappinsLock);
+#if defined(__APPLE__)
+            auto resource = static_cast<Red::gameMappinResource*>(aMappinSystem); // the finder's resource argument
+#else
             auto resource = Raw::MappinSystem::CookedMappinResource::Ptr(aMappinSystem)->instance;
+#endif
             resource->cookedData.PushBack(std::move(cookedMappin));
 
             aCookedMappin = &resource->cookedData.Back();
@@ -272,7 +326,14 @@ bool App::JournalExtension::ResolveMappinPosition(uint32_t aHash, const JournalM
 
     bool success{};
     Red::Transform transform{};
+#if defined(__APPLE__)
+    // R27 (Mac): the default ScriptGameInstance takes the instance from CGameEngine::Get(), whose data address has no Mac entry (it reads as zeros), so
+    // the instance stayed null and GetNodeTransform failed for every cooked mappin ("Can't resolve mappin #... position", found by the autotest harness
+    // for Lizzie's bar pin). The live instance comes from Codeware's hooks, the same one its GetGameInstance replacement hands to scripts.
+    Red::ScriptGameInstance game{Red::MacGameInstance()};
+#else
     Red::ScriptGameInstance game{};
+#endif
     Red::CallStatic("ScriptGameInstance", "GetNodeTransform", success, game, aMappin.resolved, transform);
 
     if (!success)
@@ -300,8 +361,12 @@ bool App::JournalExtension::ResolveMappinVolume(uint32_t aJournalHash,
 
     auto nativeNodeRegistry = Red::GetRuntimeSystem<Red::worldNodeInstanceRegistry>();
 
+#if defined(__APPLE__)
+    auto nodeInstance = Raw::WorldNodeRegistry::FindNode(nativeNodeRegistry, aMappin.resolved.hash);
+#else
     Red::Handle<Red::worldINodeInstance> nodeInstance;
     Raw::WorldNodeRegistry::FindNode(nativeNodeRegistry, nodeInstance, aMappin.resolved.hash);
+#endif
 
     if (!nodeInstance)
         return false;
@@ -563,11 +628,16 @@ void App::JournalExtension::ReloadJournal()
     Red::JournalEntryHash poiHash{};
 
     {
+#if defined(__APPLE__)
+        Red::Handle<Red::game::JournalEntry> quest = Raw::JournalManager::GetTrackedQuest(manager);
+        Red::Handle<Red::game::JournalEntry> poi = Raw::JournalManager::GetTrackedPointOfInterest(manager);
+#else
         Red::Handle<Red::game::JournalEntry> quest;
         Red::Handle<Red::game::JournalEntry> poi;
 
         Raw::JournalManager::GetTrackedQuest(manager, quest);
         Raw::JournalManager::GetTrackedPointOfInterest(manager, poi);
+#endif
 
         if (quest)
             questHash = Raw::JournalManager::GetEntryHash(manager, quest);
@@ -582,14 +652,22 @@ void App::JournalExtension::ReloadJournal()
         Raw::JournalManager::TrackPointOfInterest(manager, null);
     }
 
+#if defined(__APPLE__)
+    Red::JobHandle job = Raw::JournalManager::LoadJournal(manager);
+#else
     Red::JobHandle job{};
     Raw::JournalManager::LoadJournal(manager, job);
+#endif
     Raw::JobHandle::Wait(job);
 
     if (questHash)
     {
+#if defined(__APPLE__)
+        Red::Handle<Red::game::JournalEntry> quest = Red::Cast<Red::game::JournalEntry>(Raw::JournalManager::GetEntryByHash(manager, questHash));
+#else
         Red::Handle<Red::game::JournalEntry> quest;
         Raw::JournalManager::GetEntryByHash(manager, quest, questHash);
+#endif
 
         if (quest)
             Raw::JournalManager::TrackQuest(manager, quest);
@@ -597,8 +675,12 @@ void App::JournalExtension::ReloadJournal()
 
     if (poiHash)
     {
+#if defined(__APPLE__)
+        Red::Handle<Red::game::JournalEntry> poi = Red::Cast<Red::game::JournalEntry>(Raw::JournalManager::GetEntryByHash(manager, poiHash));
+#else
         Red::Handle<Red::game::JournalEntry> poi;
         Raw::JournalManager::GetEntryByHash(manager, poi, poiHash);
+#endif
 
         if (poiHash)
             Raw::JournalManager::TrackPointOfInterest(manager, poi);

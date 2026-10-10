@@ -1,6 +1,9 @@
 #include "Extension.hpp"
 #include "App/Extensions/Localization/Language.hpp"
 #include "Red/Localization.hpp"
+#if defined(__APPLE__)
+#include "MacDiag.hpp"
+#endif
 
 namespace
 {
@@ -126,6 +129,12 @@ void App::LocalizationExtension::OnLoadTexts(Red::Handle<TextResource>& aOnScree
         }
     }
 
+#if defined(__APPLE__)
+    // R22 menu self-test (CODEWARE_MAC_DIAG=1, read-only): the game's onscreens resource after the merge.
+    MAC_DIAG("[selftest] R22 Localization onscreens language=%s entries=%u merged=%d\n", language.ToString(),
+             aOnScreens ? aOnScreens->entries.size : 0u, mergedAny ? 1 : 0);
+#endif
+
     if (!mergedAny)
         LogInfo("[{}] No translations to merge.", ExtensionName);
     else if (successAll)
@@ -138,8 +147,12 @@ bool App::LocalizationExtension::MergeTextResource(const std::string& aPath, Tex
                                                 TextEntryMap& aUsedKeyMap, uint32_t aOriginalCount,
                                                 uint64_t aOriginalMaxKey, bool aFallback)
 {
+#if defined(__APPLE__)
+    Red::Handle<TextResource> resource = Raw::Localization::LoadTexts(aPath.c_str());
+#else
     Red::Handle<TextResource> resource;
     Raw::Localization::LoadTexts(resource, aPath.c_str());
+#endif
 
     if (!resource.instance)
     {
@@ -238,7 +251,12 @@ App::TextEntry* App::LocalizationExtension::FindSameTextEntry(TextEntry& aEntry,
     if (it == end || it->primaryKey != aEntry.primaryKey)
         return nullptr;
 
+#if defined(__APPLE__)
+    // The Mac SDK port's DynArray iterators are plain pointers (RED4ext.SDK 1.0 wraps them, hence Base()).
+    return it;
+#else
     return it.Base();
+#endif
 }
 
 bool App::LocalizationExtension::IsCommentEntry(App::TextEntry& aEntry)
@@ -295,6 +313,11 @@ void App::LocalizationExtension::OnLoadSubtitles(Red::Handle<SubtitleResource>& 
         }
     }
 
+#if defined(__APPLE__)
+    MAC_DIAG("[selftest] R22 Localization subtitles language=%s entries=%u merged=%d\n", language.ToString(),
+             aSubtitles ? aSubtitles->entries.size : 0u, mergedAny ? 1 : 0);
+#endif
+
     if (!mergedAny)
         LogInfo("[{}] No subtitles to merge.", ExtensionName);
     else if (successAll)
@@ -305,8 +328,12 @@ void App::LocalizationExtension::OnLoadSubtitles(Red::Handle<SubtitleResource>& 
 
 bool App::LocalizationExtension::MergeSubtitleResource(const std::string& aPath, App::SubtitleEntryList& aFinalList)
 {
+#if defined(__APPLE__)
+    Red::Handle<SubtitleResource> resource = Raw::Localization::LoadSubtitles(aPath.c_str());
+#else
     Red::Handle<SubtitleResource> resource;
     Raw::Localization::LoadSubtitles(resource, aPath.c_str());
+#endif
 
     if (!resource.instance)
     {

@@ -33,6 +33,11 @@ private:
     static void OnMappinDataLoaded(void* aMappinSystem, Red::worldRuntimeScene*);
     static void* OnGetMappinData(void* aMappinSystem, uint32_t aHash);
     static void* OnGetPoiData(void* aMappinSystem, uint32_t aHash);
+#if defined(__APPLE__)
+    // macOS: hooks on the finders behind the 16 byte getter wrappers; the first argument is the cooked resource, not the system.
+    static void* OnFindMappinData(void* aResource, uint32_t aHash);
+    static void* OnFindPoiData(void* aResource, uint32_t aHash);
+#endif
 
     static EntrySearchResult FindEntry(Red::game::JournalEntry* aParent, Red::CString& aPath);
     static bool MergeEntries(Red::game::JournalContainerEntry* aTarget, Red::game::JournalContainerEntry* aSource,

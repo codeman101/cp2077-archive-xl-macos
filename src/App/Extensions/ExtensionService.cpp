@@ -19,6 +19,9 @@
 #include "Red/GameEngine.hpp"
 #include "Red/ResourceLoader.hpp"
 #include "Red/TweakDB.hpp"
+#if defined(__APPLE__)
+#include "MacDiag.hpp"
+#endif
 
 App::ExtensionService::ExtensionService(std::filesystem::path aBundleDir)
     : m_bundleDir(std::move(aBundleDir))
@@ -63,7 +66,12 @@ void App::ExtensionService::OnBootstrap()
 void App::ExtensionService::OnShutdown()
 {
     m_loader->Unload();
+#if defined(__APPLE__)
+    // R27: left alone at the process exit (see Main.cpp): the extensions hold resource tokens and handles of the game.
+    (void)m_loader.release();
+#else
     m_loader = nullptr;
+#endif
 }
 
 void App::ExtensionService::Configure()
@@ -77,6 +85,10 @@ void App::ExtensionService::Configure()
 
             m_loader->Configure();
             m_loader->Reload();
+
+#if defined(__APPLE__)
+            MAC_DIAG("[selftest] R22 hot reload: the loader update hook fired, Configure and Reload ran\n");
+#endif
 
             Unhook<Raw::ResourceLoader::OnUpdate>();
         });

@@ -25,6 +25,12 @@ protected:
     void OnInitializeArchives(Red::ResourceDepot* aDepot);
     static Red::ArchiveGroup& ResolveArchiveGroup(Red::ResourceDepot* aDepot, const Red::CString& aBasePath);
 
+#if defined(__APPLE__)
+    // macOS (R22): archive file names that are not mounted (mac-mount-skip.txt next to the plugin, one name per line).
+    void LoadSkipList();
+    Core::Set<std::string> m_skipNames;
+#endif
+
     Core::Vector<std::filesystem::path> m_archives;
     Core::Vector<std::filesystem::path> m_dirs;
     std::filesystem::path m_bundleDir;
