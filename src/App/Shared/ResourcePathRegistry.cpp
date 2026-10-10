@@ -22,6 +22,7 @@ void App::ResourcePathRegistry::OnBootstrap()
         s_instance->m_initialized = true;
         s_instance->m_map.reserve(400000);
 
+        // If another plugin (Codeware) published the registry first, m_initialized is already true and its hook fills the shared map.
         HookAfter<Raw::ResourcePath::Create>(&OnCreatePath);
     }
 
@@ -44,6 +45,17 @@ void App::ResourcePathRegistry::OnBootstrap()
     }
 }
 
+#if defined(__APPLE__)
+void App::ResourcePathRegistry::OnCreatePath(uint64_t& aHash, const char* aData, uint32_t aSize)
+{
+    if (aData && aSize > 0 && aHash)
+    {
+        s_instance->m_hits.fetch_add(1, std::memory_order_relaxed);
+        std::scoped_lock _(s_instance->m_lock);
+        s_instance->m_map[Red::ResourcePath(aHash)] = {aData, aSize};
+    }
+}
+#else
 void App::ResourcePathRegistry::OnCreatePath(Red::ResourcePath* aPath, Red::StringView* aPathStr)
 {
     if (aPathStr && *aPathStr)
@@ -52,6 +64,7 @@ void App::ResourcePathRegistry::OnCreatePath(Red::ResourcePath* aPath, Red::Stri
         s_instance->m_map[*aPath] = {aPathStr->Data(), aPathStr->Length()};
     }
 }
+#endif
 
 std::string App::ResourcePathRegistry::ResolvePath(Red::ResourcePath aPath)
 {

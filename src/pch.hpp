@@ -113,6 +113,14 @@
 #include <RED4ext/Scripting/Natives/Generated/ink/IWidgetController.hpp>
 #include <RED4ext/Scripting/Natives/Generated/ink/Widget.hpp>
 #include <RED4ext/Scripting/Natives/Generated/ink/WidgetLibraryItemInstance.hpp>
+#if defined(__APPLE__)
+// macOS (clang): the Handle destructor needs the complete type, so the ink animation types are included here.
+#include <RED4ext/Scripting/Natives/Generated/ink/anim/Interpolator.hpp>
+#include <RED4ext/Scripting/Natives/Generated/ink/anim/Event.hpp>
+#include <RED4ext/Scripting/Natives/Generated/ink/anim/Definition.hpp>
+#include <RED4ext/Scripting/Natives/Generated/ink/anim/SequenceTargetInfo.hpp>
+#include <RED4ext/Scripting/Natives/Generated/ink/anim/Sequence.hpp>
+#endif
 #include <RED4ext/Scripting/Natives/Generated/ink/WidgetLibraryResource.hpp>
 #include <RED4ext/Scripting/Natives/Generated/ink/WidgetLogicController.hpp>
 #include <RED4ext/Scripting/Natives/Generated/ink/anim/AnimationLibraryResource.hpp>
