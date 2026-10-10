@@ -53,8 +53,13 @@ bool App::TransmogExtension::OnLoadTemplate(Red::ItemFactoryAppearanceChangeRequ
             auto factoryName = entityFlat->ToString();
 #endif
 
+#if defined(__APPLE__)
+            // Mac: the ResourcePath hash comes back in x0 (0 when the factory has no such entry).
+            Red::ResourcePath overridePath{Raw::FactoryIndex::ResolveResource(entityFactory, *entityFlat)};
+#else
             Red::ResourcePath overridePath;
             Raw::FactoryIndex::ResolveResource(entityFactory, overridePath, *entityFlat);
+#endif
 
             if (overridePath)
             {
@@ -74,6 +79,46 @@ bool App::TransmogExtension::OnLoadTemplate(Red::ItemFactoryAppearanceChangeRequ
     return result;
 }
 
+#if defined(__APPLE__)
+Red::CName App::TransmogExtension::OnSelectAppearance(const Red::Handle<Red::TweakDBRecord>& aItemRecord,
+                                                      const Red::ItemID& aItemID,
+                                                      const Red::Handle<Red::AppearanceResource>& aAppearanceResource,
+                                                      uint64_t a5, Red::CName aAppearanceName)
+{
+    if (!aAppearanceName)
+    {
+        {
+            auto appearanceName = Red::GetFlatValue<Red::CName>({aItemRecord->recordID, ".appearanceName"});
+            if (appearanceName)
+            {
+                for (const auto& appearanceDefinition : aAppearanceResource->appearances)
+                {
+                    if (appearanceDefinition->name == appearanceName)
+                    {
+                        return appearanceName;
+                    }
+                }
+            }
+        }
+        {
+            auto visualTags = Red::GetFlatPtr<Red::DynArray<Red::CName>>({aItemRecord->recordID, ".visualTags"});
+            if (visualTags && visualTags->size == 1)
+            {
+                auto& appearanceName = visualTags->entries[0];
+                for (const auto& appearanceDefinition : aAppearanceResource->appearances)
+                {
+                    if (appearanceDefinition->name == appearanceName)
+                    {
+                        return appearanceName;
+                    }
+                }
+            }
+        }
+    }
+
+    return Raw::AppearanceChanger::SelectAppearanceName(aItemRecord, aItemID, aAppearanceResource, a5, aAppearanceName);
+}
+#else
 void* App::TransmogExtension::OnSelectAppearance(Red::CName* aOut,
                                                     const Red::Handle<Red::TweakDBRecord>& aItemRecord,
                                                     const Red::ItemID& aItemID,
@@ -116,3 +161,4 @@ void* App::TransmogExtension::OnSelectAppearance(Red::CName* aOut,
     return Raw::AppearanceChanger::SelectAppearanceName(aOut, aItemRecord, aItemID, aAppearanceResource,
                                                         a5, aAppearanceName);
 }
+#endif

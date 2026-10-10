@@ -83,7 +83,15 @@ constexpr auto ExtractComponentsJob = Core::RawFunc<
     /* addr = */ Red::AddressLib::EntityBuilder_ExtractComponentsJob,
     /* type = */ void (*)(Red::EntityBuilderJobParams* aParams, void* a2)>();
 
+#if defined(__APPLE__)
+// Mac (R22, HIGH): the function takes the builder and the queue and builds the job params itself (Windows: the out-of-line JobQueue::Dispatch
+// with params built by the caller). The weak pointer to the builder is builder->self.
+constexpr auto ScheduleExtractComponentsJob = Core::RawFunc<
+    /* addr = */ Red::AddressLib::EntityBuilder_ScheduleExtractComponentsJob,
+    /* type = */ void (*)(Red::EntityBuilder* aBuilder, Red::JobQueue& aJobQueue)>();
+#else
 constexpr auto ScheduleExtractComponentsJob = Core::RawFunc<
     /* addr = */ Red::AddressLib::EntityBuilder_ScheduleExtractComponentsJob,
     /* type = */ void (*)(Red::JobQueue& aJobQueue, void* a2, Red::EntityBuilderJobParams* aParams)>();
+#endif
 }

@@ -33,11 +33,18 @@ bool App::AttachmentExtension::Load()
     HookAfter<Raw::AttachmentSlots::InitializeSlots>(&OnInitializeSlots).OrThrow();
     Hook<Raw::AttachmentSlots::IsSlotSpawning>(&OnSlotSpawningCheck).OrThrow();
     HookAfter<Raw::TPPRepresentationComponent::OnAttach>(&OnAttachTPP).OrThrow();
+#if defined(__APPLE__)
+    HookBefore<Raw::TPPRepresentationComponent::OnItemEquipped>(&OnItemEquippedTPP).OrThrow();
+    HookBefore<Raw::TPPRepresentationComponent::OnItemUnequipped>(&OnItemUnequippedTPP).OrThrow();
+#else
     HookAfter<Raw::TPPRepresentationComponent::IsAffectedSlot>(&OnSlotCheckTPP).OrThrow();
+#endif
     HookAfter<Raw::CharacterCustomizationHairstyleController::CheckState>(&OnCheckHairState).OrThrow();
     //HookAfter<Raw::CharacterCustomizationGenitalsController::CheckState>(&OnCheckBodyState).OrThrow();
     HookAfter<Raw::CharacterCustomizationFeetController::CheckState>(&OnCheckFeetState).OrThrow();
+#if !defined(__APPLE__)
     HookWrap<Raw::AppearanceChanger::GetSuffixValue>(&OnGetSuffixValue).OrThrow();
+#endif
 
     {
         std::unique_lock _(s_slotsMutex);
@@ -53,11 +60,18 @@ bool App::AttachmentExtension::Unload()
     Unhook<Raw::AttachmentSlots::InitializeSlots>();
     Unhook<Raw::AttachmentSlots::IsSlotSpawning>();
     Unhook<Raw::TPPRepresentationComponent::OnAttach>();
+#if defined(__APPLE__)
+    Unhook<Raw::TPPRepresentationComponent::OnItemEquipped>();
+    Unhook<Raw::TPPRepresentationComponent::OnItemUnequipped>();
+#else
     Unhook<Raw::TPPRepresentationComponent::IsAffectedSlot>();
+#endif
     Unhook<Raw::CharacterCustomizationHairstyleController::CheckState>();
     // Unhook<Raw::CharacterCustomizationGenitalsController::CheckState>();
     Unhook<Raw::CharacterCustomizationFeetController::CheckState>();
+#if !defined(__APPLE__)
     Unhook<Raw::AppearanceChanger::GetSuffixValue>();
+#endif
 
     return true;
 }
@@ -201,6 +215,52 @@ void App::AttachmentExtension::OnSlotCheckTPP(bool& aAffected, Red::TweakDBID aS
     }
 }
 
+#if defined(__APPLE__)
+bool App::AttachmentExtension::IsExtraAffectedSlotTPP(Red::TweakDBID aSlotID)
+{
+    // The game handles Head and Eyes itself (the inlined check in both functions).
+    for (const auto slotID : TPPAffectedSlots)
+    {
+        if (slotID == aSlotID)
+            return false;
+    }
+
+    bool affected = false;
+    OnSlotCheckTPP(affected, aSlotID);
+    return affected;
+}
+
+void App::AttachmentExtension::OnItemEquippedTPP(Red::game::TPPRepresentationComponent* aComponent, Red::TweakDBID aItemID,
+                                                 Red::TweakDBID aSlotID)
+{
+    if (!aComponent || !aComponent->owner || !IsExtraAffectedSlotTPP(aSlotID))
+        return;
+
+    auto transactionSystem = Red::GetGameSystem<Red::ITransactionSystem>();
+    if (!transactionSystem)
+        return;
+
+    auto slotData = transactionSystem->FindSlotData(aComponent->owner,
+                                                    [aSlotID](const Red::AttachmentSlotData& aSlotData)
+                                                    {
+                                                        return aSlotData.slotID == aSlotID;
+                                                    });
+    if (slotData && slotData->itemObject)
+    {
+        Raw::TPPRepresentationComponent::RegisterAffectedItem(aComponent, aItemID, slotData->itemObject);
+    }
+}
+
+void App::AttachmentExtension::OnItemUnequippedTPP(Red::game::TPPRepresentationComponent* aComponent, Red::TweakDBID aItemID,
+                                                   Red::TweakDBID aSlotID)
+{
+    if (!aComponent || !IsExtraAffectedSlotTPP(aSlotID))
+        return;
+
+    Raw::TPPRepresentationComponent::UnregisterAffectedItem(aComponent, aItemID);
+}
+#endif
+
 void App::AttachmentExtension::OnCheckHairState(Red::game::ui::CharacterCustomizationHairstyleController* aComponent,
                                                 Red::CharacterBodyPartState& aHairState)
 {
@@ -245,6 +305,39 @@ void App::AttachmentExtension::OnCheckFeetState(Red::game::ui::CharacterCustomiz
     }
 }
 
+#if defined(__APPLE__)
+void App::AttachmentExtension::ApplyInnerSleevesSuffix(Red::CString& aSuffixes, Red::Handle<Red::GameObject>& aOwner,
+                                                       Red::TweakDBID aItemRecordID, const Red::ItemID& aItemID)
+{
+    if (!aOwner)
+        return;
+
+    const auto* suffixIDs = Red::GetFlatPtr<Red::DynArray<Red::TweakDBID>>({aItemRecordID, ".appearanceSuffixes"});
+    if (!suffixIDs || !suffixIDs->Contains(InnerSleevesSuffix))
+        return;
+
+    const std::string_view desired = IsVisualTagActive(aOwner, TorsoSlot, HideInnerSleevesTag, aItemID.tdbid)
+                                         ? HideInnerSleevesSuffixValue
+                                         : ShowInnerSleevesSuffixValue;
+    const std::string_view other = desired == HideInnerSleevesSuffixValue ? ShowInnerSleevesSuffixValue
+                                                                          : HideInnerSleevesSuffixValue;
+
+    // The game's Partial suffix appends "<separator>Full" or "<separator>Part"; replace that whole token (a word of its own).
+    std::string suffixes = aSuffixes.c_str();
+    for (size_t pos = suffixes.find(other); pos != std::string::npos; pos = suffixes.find(other, pos + 1))
+    {
+        const auto end = pos + other.size();
+        const bool tokenStart = pos == 0 || !std::isalnum(static_cast<unsigned char>(suffixes[pos - 1]));
+        const bool tokenEnd = end == suffixes.size() || !std::isalnum(static_cast<unsigned char>(suffixes[end]));
+        if (tokenStart && tokenEnd)
+        {
+            suffixes.replace(pos, other.size(), desired);
+            aSuffixes = suffixes.c_str();
+            return;
+        }
+    }
+}
+#else
 bool App::AttachmentExtension::OnGetSuffixValue(Raw::AppearanceChanger::GetSuffixValuePtr aOriginalFunc,
                                                 const Red::ItemID& aItemID, uint64_t a2,
                                                 Red::Handle<Red::GameObject>& aOwner,
@@ -261,6 +354,7 @@ bool App::AttachmentExtension::OnGetSuffixValue(Raw::AppearanceChanger::GetSuffi
 
     return aOriginalFunc(aItemID, a2, aOwner, aSuffixRecordID, aResult);
 }
+#endif
 
 bool App::AttachmentExtension::IsVisualTagActive(Red::Handle<Red::Entity>& aOwner,
                                                  Red::TweakDBID aBaseSlotID, Red::CName aVisualTag,
@@ -309,8 +403,13 @@ bool App::AttachmentExtension::IsVisualTagActive(Red::ITransactionSystem* aTrans
 
         if (slotData->itemObject)
         {
+#if defined(__APPLE__)
+            // Mac: the CName comes back in x0 (no out argument).
+            const Red::CName itemAppearance = Raw::ItemObject::GetAppearanceName(slotData->itemObject);
+#else
             Red::CName itemAppearance;
             Raw::ItemObject::GetAppearanceName(slotData->itemObject, itemAppearance);
+#endif
 
             return itemAppearance && itemAppearance != EmptyAppearanceName &&
                    aTransactionSystem->MatchVisualTag(slotData->itemObject, aVisualTag, false);

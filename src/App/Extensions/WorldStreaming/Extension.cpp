@@ -1,6 +1,9 @@
 #include "Extension.hpp"
 #include "App/Extensions/ResourcePatch/Extension.hpp"
 #include "Red/CommunitySystem.hpp"
+#if defined(__APPLE__)
+#include "MacDiag.hpp"
+#endif
 
 namespace
 {
@@ -98,6 +101,24 @@ void App::WorldStreamingExtension::Configure()
 
         unit.sectors.clear();
     }
+
+#if defined(__APPLE__)
+    // R22 menu self-test (CODEWARE_MAC_DIAG=1, read-only): the streaming blocks the configuration lists, and whether the depot has them.
+    {
+        size_t blocks = 0;
+        size_t present = 0;
+        for (const auto& unit : m_configs)
+        {
+            for (const auto& blockPathStr : unit.blocks)
+            {
+                ++blocks;
+                present += depot->ResourceExists(Red::ResourcePath(blockPathStr.data())) ? 1 : 0;
+            }
+        }
+        MAC_DIAG("[selftest] R22 WorldStreaming registered: %zu streaming blocks (%zu in the depot), %zu sector patches\n", blocks, present,
+                 s_sectors.size());
+    }
+#endif
 }
 
 void App::WorldStreamingExtension::PostConfigure()
@@ -629,7 +650,13 @@ void App::WorldStreamingExtension::OnRegisterSpots(Red::AIWorkspotManager* aMana
         auto newSize = allSpots->size + aNewSpots.Size();
         if (allSpots->capacity < newSize)
         {
+#if defined(__APPLE__)
+            // Mac (R22): the game's reserve routine is inlined at its call sites (a call of DynArray_Realloc with element size 0x20,
+            // alignment 8 and the array's mover). The SDK's SortedArray::Reserve is the same call.
+            allSpots->Reserve(newSize);
+#else
             Raw::AISpotPersistentDataArray::Reserve(allSpots, newSize);
+#endif
         }
 
         allSpots->flags |= static_cast<int32_t>(Red::SortedArray<Red::AISpotPersistentData>::Flags::NotSorted);

@@ -1,6 +1,10 @@
 #include "Extension.hpp"
 #include "Core/Facades/Container.hpp"
 #include "App/Extensions/ResourceMeta/Extension.hpp"
+#if defined(__APPLE__)
+#include "MacDiag.hpp"
+#include <atomic>
+#endif
 
 namespace
 {
@@ -75,6 +79,16 @@ void App::QuestPhaseExtension::Configure()
 
         unit.phases.clear();
     }
+
+#if defined(__APPLE__)
+    // R22 menu self-test (CODEWARE_MAC_DIAG=1, read-only): what the configuration registered.
+    {
+        size_t mods = 0;
+        for (const auto& [parent, list] : s_phases)
+            mods += list.size();
+        MAC_DIAG("[selftest] R22 QuestPhase registered: %zu parent quests, %zu phase patches\n", s_phases.size(), mods);
+    }
+#endif
 }
 
 void App::QuestPhaseExtension::OnPhasePreload(void* aLoader, Red::ResourcePath aPhasePath,
@@ -82,6 +96,14 @@ void App::QuestPhaseExtension::OnPhasePreload(void* aLoader, Red::ResourcePath a
 {
     const auto& phaseMods = s_phases.find(aPhaseResource->path);
 
+#if defined(__APPLE__)
+    static std::atomic<uint32_t> s_phaseCalls{0};
+    if (phaseMods != s_phases.end() || s_phaseCalls.fetch_add(1) < 3)
+    {
+        MAC_DIAG("[selftest] R27 QuestPhase ProcessPhaseResource: %016llx %s\n", static_cast<unsigned long long>(aPhaseResource->path.hash),
+                 phaseMods != s_phases.end() ? "is a parent of a merged phase" : "(not a parent)");
+    }
+#endif
     if (phaseMods == s_phases.end())
         return;
 
@@ -96,12 +118,20 @@ void App::QuestPhaseExtension::OnPhasePreload(void* aLoader, Red::ResourcePath a
 
 void App::QuestPhaseExtension::OnGameRestored(Red::QuestsSystem* aSystem)
 {
+#if defined(__APPLE__)
+    // R27 diagnostics (CODEWARE_MAC_DIAG=1): why a merged phase does or does not start in an existing save.
+    MAC_DIAG("[selftest] R27 QuestPhase OnGameRestored: %zu forced quest(s), system %p\n", s_forced.size(), static_cast<void*>(aSystem));
+#endif
     if (s_forced.empty())
         return;
 
     auto& factManager = Raw::QuestsSystem::FactManager::Ref(aSystem);
     auto& nodeHashMap = Raw::QuestsSystem::NodeHashMap::Ref(aSystem);
     const auto& questList = Raw::QuestsSystem::QuestList::Ref(aSystem);
+#if defined(__APPLE__)
+    MAC_DIAG("[selftest] R27 QuestPhase OnGameRestored: quest list %u entries, fact manager %p, node map size %u\n", questList.size,
+             static_cast<void*>(factManager), nodeHashMap.size);
+#endif
 
     for (const auto& [questPath, phaseNodeIds] : s_forced)
     {
@@ -113,15 +143,28 @@ void App::QuestPhaseExtension::OnGameRestored(Red::QuestsSystem* aSystem)
                 break;
         }
 
+#if defined(__APPLE__)
+        MAC_DIAG("[selftest] R27 QuestPhase OnGameRestored: quest %016llx -> index %d of %u (%s), %zu phase node(s)\n",
+                 static_cast<unsigned long long>(questPath.hash), static_cast<int>(questId), questList.Size(),
+                 questId < questList.Size() ? "found" : "NOT in the quest list", phaseNodeIds.size());
+#endif
         if (questId >= questList.Size())
             continue;
 
         Red::QuestNodePath questNodePath{questId};
         Red::QuestNodePathHash questNodeHash = Red::MakeQuestNodePathHash(questNodePath);
 
+#if defined(__APPLE__)
+        MAC_DIAG("[selftest] R27 QuestPhase OnGameRestored: node path hash %08x %s the game's node map (size %u)\n",
+                 static_cast<unsigned>(questNodeHash), nodeHashMap.Get(questNodeHash) ? "is already in" : "is NOT in", nodeHashMap.size);
+#endif
         if (!nodeHashMap.Get(questNodeHash))
         {
             nodeHashMap.Insert(questNodeHash, questNodePath);
+#if defined(__APPLE__)
+            MAC_DIAG("[selftest] R27 QuestPhase OnGameRestored: inserted, map size now %u, found again: %d\n", nodeHashMap.size,
+                     nodeHashMap.Get(questNodeHash) ? 1 : 0);
+#endif
         }
 
         for (const auto& phaseNodeId : phaseNodeIds)
@@ -129,12 +172,20 @@ void App::QuestPhaseExtension::OnGameRestored(Red::QuestsSystem* aSystem)
             Red::QuestNodeKey phaseNodeKey{questNodeHash, phaseNodeId};
             Red::FactID phaseFactId{phaseNodeKey};
 
+#if defined(__APPLE__)
+            const int32_t before = factManager->GetFact(phaseFactId);
+            MAC_DIAG("[selftest] R27 QuestPhase OnGameRestored: node %u of quest hash %016llx, fact before %d\n", static_cast<unsigned>(phaseNodeId),
+                     static_cast<unsigned long long>(questNodeHash), before);
+#endif
             if (!factManager->GetFact(phaseFactId))
             {
                 Red::DynArray<Red::CName> phaseNodeSockets{"In1"};
                 Raw::QuestsSystem::ForceStartNode(aSystem, phaseNodeKey, phaseNodeSockets);
 
                 factManager->SetFact(phaseFactId, 1);
+#if defined(__APPLE__)
+                MAC_DIAG("[selftest] R27 QuestPhase OnGameRestored: ForceStartNode called, fact now %d\n", factManager->GetFact(phaseFactId));
+#endif
             }
         }
     }
@@ -143,6 +194,10 @@ void App::QuestPhaseExtension::OnGameRestored(Red::QuestsSystem* aSystem)
 void App::QuestPhaseExtension::OnQuestStart(Red::questRootInstance* aInstance, Red::QuestContext* aContext,
                                             const Red::Handle<Red::questQuestResource>& aResource)
 {
+#if defined(__APPLE__)
+    MAC_DIAG("[selftest] R27 QuestPhase OnQuestStart: %zu forced quest(s), resource %016llx\n", s_forced.size(),
+             aResource ? static_cast<unsigned long long>(aResource->path.hash) : 0ull);
+#endif
     if (s_forced.empty())
         return;
 

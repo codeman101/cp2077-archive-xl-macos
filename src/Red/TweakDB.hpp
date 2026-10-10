@@ -7,6 +7,14 @@ inline T* GetFlatPtr(TweakDBID aFlatID)
 {
     auto tweakDB = Red::TweakDB::Get();
 
+#if defined(__APPLE__)
+    // R26. A TweakDBID that comes out of game memory (a record field, an argument) can carry the offset that the game caches in bytes 5 to 7 of
+    // the id; there it is the offset of the VALUE of the flat, while the SDK takes an offset in an id for the offset of the FlatValue and reads a
+    // vtable from it (r26 crash on the first save load). Look the flat up by hash and length alone, which is what the game's slow path does too.
+    // Ids that the plugin made itself are found in the flats table the same way.
+    aFlatID = TweakDBID(aFlatID.name.hash, aFlatID.name.length);
+#endif
+
     std::shared_lock _(tweakDB->mutex00);
 
     auto* flatValue = tweakDB->GetFlatValue(aFlatID);

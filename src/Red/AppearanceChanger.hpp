@@ -49,6 +49,16 @@ RED4EXT_ASSERT_OFFSET(AppearanceChangeRequest, newAppearance, 0x20);
 
 namespace Raw::AppearanceChanger
 {
+#if defined(__APPLE__)
+// Mac ABI (R22, Mac 0x370D924 = the Windows wrapper 0x8576CC plus the inner function 0x858B20): the CString comes back through x8 and the
+// record is passed as a Handle (the function loads the instance from it). GetSuffixValue is inlined into the suffix loop.
+constexpr auto GetSuffixes = Core::RawFunc<
+    /* addr = */ Red::AddressLib::AppearanceChanger_GetSuffixes,
+    /* type = */ Red::CString (*)(Red::Handle<Red::GameObject>& aOwner,
+                                  Red::Handle<Red::GameObject>& aOwnerOverride,
+                                  const Red::Handle<Red::TweakDBRecord>& aItemRecord,
+                                  const Red::ItemID& aItemID)>();
+#else
 constexpr auto GetSuffixes = Core::RawFunc<
     /* addr = */ Red::AddressLib::AppearanceChanger_GetSuffixes,
     /* type = */ void* (*)(Red::CString& aResult,
@@ -56,7 +66,9 @@ constexpr auto GetSuffixes = Core::RawFunc<
                            Red::Handle<Red::GameObject>& aOwnerOverride,
                            const Red::TweakDBRecord& aItemRecord,
                            const Red::ItemID& aItemID)>();
+#endif
 
+#if !defined(__APPLE__)
 constexpr auto GetSuffixValue = Core::RawFunc<
     /* addr = */ Red::AddressLib::AppearanceChanger_GetSuffixValue,
     /* type = */ bool (*)(const Red::ItemID& aItemID,
@@ -65,6 +77,7 @@ constexpr auto GetSuffixValue = Core::RawFunc<
                           Red::TweakDBID aSuffixRecordID,
                           Red::CString& aResult)>();
 using GetSuffixValuePtr = decltype(GetSuffixValue)::Callable;
+#endif
 
 constexpr auto RegisterPart = Core::RawFunc<
     /* addr = */ Red::AddressLib::AppearanceChanger_RegisterPart,
@@ -89,6 +102,16 @@ constexpr auto ComputePlayerGarment = Core::RawFunc<
                           uintptr_t a7,
                           bool a8)>();
 
+#if defined(__APPLE__)
+// Mac ABI (R22, Mac 0x3732C68): the selected CName comes back in x0 and the out argument is gone.
+constexpr auto SelectAppearanceName = Core::RawFunc<
+    /* addr = */ Red::AddressLib::AppearanceChanger_SelectAppearanceName,
+    /* type = */ Red::CName (*)(const Red::Handle<Red::TweakDBRecord>& aItemRecord,
+                                const Red::ItemID& aItemID,
+                                const Red::Handle<Red::AppearanceResource>& aAppearanceResource,
+                                uint64_t a5,
+                                Red::CName aAppearanceName)>();
+#else
 constexpr auto SelectAppearanceName = Core::RawFunc<
     /* addr = */ Red::AddressLib::AppearanceChanger_SelectAppearanceName,
     /* type = */ void* (*)(Red::CName* aOut,
@@ -97,10 +120,30 @@ constexpr auto SelectAppearanceName = Core::RawFunc<
                            const Red::Handle<Red::AppearanceResource>& aAppearanceResource,
                            uint64_t a5,
                            Red::CName aAppearanceName)>();
+#endif
 }
 
 namespace Raw::RuntimeSystemEntityAppearanceChanger
 {
+#if defined(__APPLE__)
+// Mac ABI (R22, /tmp/axl-d-signatures.md 2.7): ChangeAppearance takes one more bool than the Windows declaration (a garbage x3 otherwise),
+// and ChangeAppearances takes the two Range arguments by value in register pairs (x2:x3 and x4:x5), not through a hidden pointer.
+constexpr auto ChangeAppearance = Core::RawFunc<
+    /* addr = */ Red::AddressLib::AppearanceChangeSystem_ChangeAppearance1,
+    /* type = */ void (*)(Red::world::RuntimeSystemEntityAppearanceChanger& aSystem,
+                          Red::AppearanceChangeRequest* aRequest,
+                          uintptr_t a3,
+                          bool a4)>();
+
+constexpr auto ChangeAppearances = Core::RawFunc<
+    /* addr = */ Red::AddressLib::AppearanceChangeSystem_ChangeAppearance2,
+    /* type = */ void (*)(Red::world::RuntimeSystemEntityAppearanceChanger& aSystem,
+                          Red::Handle<Red::game::Puppet>& aTarget,
+                          Red::Range<Red::AppearanceDescriptor> aOldApp,
+                          Red::Range<Red::AppearanceDescriptor> aNewApp,
+                          uintptr_t a5,
+                          uint8_t a6)>();
+#else
 constexpr auto ChangeAppearance = Core::RawFunc<
     /* addr = */ Red::AddressLib::AppearanceChangeSystem_ChangeAppearance1,
     /* type = */ void (*)(Red::world::RuntimeSystemEntityAppearanceChanger& aSystem,
@@ -115,6 +158,7 @@ constexpr auto ChangeAppearances = Core::RawFunc<
                           Red::Range<Red::AppearanceDescriptor>& aNewApp,
                           uintptr_t a5,
                           uint8_t a6)>();
+#endif
 }
 
 

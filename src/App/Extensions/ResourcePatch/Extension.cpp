@@ -9,6 +9,11 @@
 #include "Red/MorphTarget.hpp"
 #include "Red/PersistencySystem.hpp"
 #include "Red/StreamingWorld.hpp"
+#if defined(__APPLE__)
+#include <strings.h>
+#include "MacDiag.hpp"
+#include "App/Utils/MacProbe.hpp"
+#endif
 
 namespace
 {
@@ -59,10 +64,16 @@ bool App::ResourcePatchExtension::Load()
     Hook<Raw::MorphTargetMesh::PostLoad>(&OnMorphTargetResourceLoad).OrThrow();
     HookBefore<Raw::EntityBuilder::ScheduleExtractComponentsJob>(&OnEntityPackageLoad).OrThrow();
     HookAfter<Raw::AppearanceDefinition::ExtractPartComponents>(&OnPartPackageExtract).OrThrow();
+#if !defined(__APPLE__)
     HookAfter<Raw::GarmentAssembler::ExtractComponentsJob>(&OnGarmentPackageExtract).OrThrow();
+#endif
     HookAfter<Raw::PersistencySystem::SetPersistentStateData>(&OnSetPersistentStateData).OrThrow();
 
     s_resourcePathRegistry = Core::Resolve<ResourcePathRegistry>();
+
+#if defined(__APPLE__)
+    MacProbe::AddStats(&LogMacStats);
+#endif
 
     return true;
 }
@@ -78,6 +89,9 @@ bool App::ResourcePatchExtension::Unload()
     Unhook<Raw::MorphTargetMesh::PostLoad>();
     Unhook<Raw::EntityBuilder::ScheduleExtractComponentsJob>();
     Unhook<Raw::AppearanceDefinition::ExtractPartComponents>();
+#if defined(__APPLE__)
+    if (IsHooked<Raw::GarmentAssembler::ExtractComponentsJob>())
+#endif
     Unhook<Raw::GarmentAssembler::ExtractComponentsJob>();
     Unhook<Raw::PersistencySystem::SetPersistentStateData>();
 
@@ -167,6 +181,51 @@ void App::ResourcePatchExtension::Configure()
         s_resourcePathRegistry->RegisterPath(knownPath, knownPathStr);
     }
 
+#if defined(__APPLE__)
+    // macOS: the garment extraction job runs for every dressed puppet and frees its own block, so the full hook is installed only when a loaded
+    // patch can use it: a patch resource that is an entity template (.ent) and modifies its components. ARCHIVEXL_MAC_GARMENT_JOB=0/1 forces it.
+    {
+        bool needed = false;
+        for (const auto& [patchPath, patchInstances] : s_patches)
+        {
+            const auto pathIt = knownPaths.find(patchPath);
+            if (pathIt == knownPaths.end())
+                continue;
+
+            const auto& pathStr = pathIt->second;
+            if (pathStr.size() >= 4 && strcasecmp(pathStr.c_str() + pathStr.size() - 4, ".ent") == 0 &&
+                std::ranges::any_of(patchInstances, [](const PatchInstancePtr& aInstance) {
+                    return aInstance->Modifies(EntityTemplateComponentsProp);
+                }))
+            {
+                needed = true;
+                break;
+            }
+        }
+
+        if (const char* forced = std::getenv("ARCHIVEXL_MAC_GARMENT_JOB"))
+        {
+            if (forced[0] == '0')
+                needed = false;
+            else if (forced[0] == '1')
+                needed = true;
+        }
+
+        if (needed)
+        {
+            if (!IsHooked<Raw::GarmentAssembler::ExtractComponentsJob>())
+            {
+                Hook<Raw::GarmentAssembler::ExtractComponentsJob>(&OnGarmentPackageExtract).OrThrow();
+                LogInfo("garment package patch hook installed (an .ent patch with components is loaded)");
+            }
+        }
+        else
+        {
+            LogInfo("garment package patch hook not needed (no .ent patch targets)");
+        }
+    }
+#endif
+
     m_configs.clear();
 }
 
@@ -177,6 +236,11 @@ void App::ResourcePatchExtension::OnResourceRequest(void* aSerializer, uint64_t 
 
     if (patchList.empty())
         return;
+
+#if defined(__APPLE__)
+    MAC_DIAG("[selftest] R22 ResourcePatch load request \"%s\": %zu patch resource(s)\n",
+             s_resourcePathRegistry->ResolvePathOrHash(aRequest.path).c_str(), patchList.size());
+#endif
 
     for (auto& patchInstance : patchList)
     {
@@ -508,6 +572,16 @@ void App::ResourcePatchExtension::OnAppearanceResourceLoad(Red::AppearanceResour
             }
         }
     }
+
+#if defined(__APPLE__)
+    {
+        uint32_t parts = 0;
+        for (const auto& definition : aResource->appearances)
+            parts += definition->partsValues.size;
+        MAC_DIAG("[selftest] R22 ResourcePatch appearance resource \"%s\" patched: %u definitions, %u parts, %zu patch resource(s)\n",
+                 s_resourcePathRegistry->ResolvePathOrHash(aResource->path).c_str(), aResource->appearances.size, parts, patchList.size());
+    }
+#endif
 }
 
 void App::ResourcePatchExtension::OnMeshResourceLoad(Red::CMesh* aMesh, Red::PostLoadParams* aParams)
@@ -737,10 +811,21 @@ void App::ResourcePatchExtension::OnMorphTargetResourceLoad(Red::MorphTargetMesh
     Raw::MorphTargetMesh::PostLoad(aMorphTarget, aParams);
 }
 
+#if defined(__APPLE__)
+void App::ResourcePatchExtension::OnEntityPackageLoad(Red::EntityBuilder* aBuilder, Red::JobQueue& aJobQueue)
+{
+    if (!aBuilder)
+        return;
+
+    const Red::WeakPtr<Red::EntityBuilder> builderWeak = aBuilder->self;
+#else
 void App::ResourcePatchExtension::OnEntityPackageLoad(Red::JobQueue& aJobQueue, void*,
                                                       Red::EntityBuilderJobParams* aParams)
 {
-    aJobQueue.Dispatch([entityBuilderWeak = aParams->entityBuilderWeak](const Red::JobGroup& aJobGroup) {
+    const Red::WeakPtr<Red::EntityBuilder> builderWeak = aParams->entityBuilderWeak;
+#endif
+
+    aJobQueue.Dispatch([entityBuilderWeak = builderWeak](const Red::JobGroup& aJobGroup) {
         if (entityBuilderWeak.Expired())
             return;
 
@@ -777,7 +862,7 @@ void App::ResourcePatchExtension::OnEntityPackageLoad(Red::JobQueue& aJobQueue, 
         }
     });
 
-    aJobQueue.Dispatch([entityBuilderWeak = aParams->entityBuilderWeak](const Red::JobGroup& aJobGroup) {
+    aJobQueue.Dispatch([entityBuilderWeak = builderWeak](const Red::JobGroup& aJobGroup) {
         if (entityBuilderWeak.Expired())
             return;
 
@@ -829,6 +914,70 @@ void App::ResourcePatchExtension::OnPartPackageExtract(
     PatchPackageResults(aPartToken->resource, aResultObjects, false, true, false);
 }
 
+#if defined(__APPLE__)
+void App::ResourcePatchExtension::LogMacStats(const char* aWhere)
+{
+    MAC_DIAG("[selftest] R22 ResourcePatch %s: garment extraction job ran %u times, %u extra extractions of patch templates\n", aWhere,
+             s_garmentExtractHits.load(), s_garmentExtractPatched.load());
+}
+
+void App::ResourcePatchExtension::OnGarmentPackageExtract(Red::GarmentExtractionParamsMac* aParams,
+                                                          const Red::JobGroup& aJobGroup)
+{
+    Mac::Count(s_garmentExtractHits);
+
+    // The original releases the members of the block and frees it, so everything the patches need is copied out first. The processing context is
+    // kept as the raw pointer pair with a strong reference of our own (its type has no destructor this plugin can run).
+    const Red::Handle<Red::EntityTemplate> originalTemplate = aParams->partTemplate;
+    auto* const context = aParams->context;
+    auto* const contextRefs = aParams->contextRefs;
+    uint8_t flags[sizeof(aParams->flags)];
+    std::memcpy(flags, aParams->flags, sizeof(flags));
+
+    if (contextRefs)
+        contextRefs->IncRef();
+
+    Raw::GarmentAssembler::ExtractComponentsJob(aParams, aJobGroup);
+
+    if (originalTemplate)
+    {
+        const auto& patchList = GetPatchList(originalTemplate->path);
+
+        for (const auto& patchInstance : patchList)
+        {
+            auto patchResource = patchInstance->GetResource<Red::EntityTemplate>();
+
+            if (!patchResource)
+                continue;
+
+            if (patchInstance->Modifies(EntityTemplateComponentsProp))
+            {
+                // A fresh block from the pool the game takes it from (Jobs2Data); the job releases its members and frees it.
+                const auto allocation =
+                    Red::Memory::Allocator<Red::Memory::PoolJobs2Data>::Get()->Alloc(sizeof(Red::GarmentExtractionParamsMac));
+
+                if (!allocation.memory)
+                    continue;
+
+                auto* block = new (allocation.memory) Red::GarmentExtractionParamsMac{patchResource, context, contextRefs, {}};
+                std::memcpy(block->flags, flags, sizeof(flags));
+
+                if (contextRefs)
+                    contextRefs->IncRef(); // the block's own reference, released by the job
+
+                Mac::Count(s_garmentExtractPatched);
+
+                Raw::GarmentAssembler::ExtractComponentsJob(block, aJobGroup);
+            }
+        }
+    }
+
+    // Our own reference. If every other holder is gone by now this was the last one and the object is leaked on purpose (the correct
+    // destruction belongs to the game).
+    if (contextRefs)
+        (void)contextRefs->DecRef();
+}
+#else
 void App::ResourcePatchExtension::OnGarmentPackageExtract(Red::GarmentExtractionParams* aParams,
                                                           const Red::JobGroup& aJobGroup)
 {
@@ -855,6 +1004,7 @@ void App::ResourcePatchExtension::OnGarmentPackageExtract(Red::GarmentExtraction
 
     aParams->partTemplate = originalEntityTemplate;
 }
+#endif
 
 void App::ResourcePatchExtension::OnStreamingWorldLoad(Red::worldStreamingWorld* aWorld)
 {

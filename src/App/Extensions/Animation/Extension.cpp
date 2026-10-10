@@ -2,6 +2,10 @@
 #include "App/Extensions/ResourceMeta/Extension.hpp"
 #include "Core/Facades/Container.hpp"
 #include "Red/AnimatedComponent.hpp"
+#if defined(__APPLE__)
+#include "App/Utils/MacProbe.hpp"
+#include "MacDiag.hpp"
+#endif
 
 namespace
 {
@@ -18,6 +22,10 @@ bool App::AnimationExtension::Load()
     HookBefore<Raw::AnimatedComponent::InitializeAnimations>(&OnInitializeAnimations).OrThrow();
 
     s_resourcePathRegistry = Core::Resolve<ResourcePathRegistry>();
+
+#if defined(__APPLE__)
+    MacProbe::AddStats(&LogMacStats);
+#endif
 
     return true;
 }
@@ -82,8 +90,19 @@ void App::AnimationExtension::Configure()
     }
 }
 
+#if defined(__APPLE__)
+void App::AnimationExtension::LogMacStats(const char* aWhere)
+{
+    MAC_DIAG("[selftest] R22 Animation %s: %zu configured target(s); InitializeAnimations hook ran %u times, %u with a configured setup\n",
+             aWhere, s_animsByTarget.size(), s_hookHits.load(), s_matchHits.load());
+}
+#endif
+
 void App::AnimationExtension::OnInitializeAnimations(Red::entAnimatedComponent* aComponent)
 {
+#if defined(__APPLE__)
+    Mac::Count(s_hookHits);
+#endif
     const auto& templatePath = aComponent->owner->templatePath;
 
     auto anims = s_animsByTarget.find(templatePath);
@@ -93,6 +112,10 @@ void App::AnimationExtension::OnInitializeAnimations(Red::entAnimatedComponent* 
         if (anims == s_animsByTarget.end())
             return;
     }
+
+#if defined(__APPLE__)
+    Mac::Count(s_matchHits);
+#endif
 
     LogInfo("[{}] Initializing animations for \"{}:{}\"...",
             ExtensionName, s_resourcePathRegistry->ResolvePathOrHash(templatePath), aComponent->name.ToString());

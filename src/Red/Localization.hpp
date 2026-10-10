@@ -11,6 +11,17 @@ namespace Raw::Localization
 using VoiceOverTokens = Core::OffsetPtr<0x8, Red::HashMap<uint32_t, Red::DynArray<Red::SharedPtr<Red::ResourceToken<Red::JsonResource>>>>>;
 using LipMapToken = Core::OffsetPtr<0x188, Red::SharedPtr<Red::ResourceToken<Red::animLipsyncMapping>>>;
 
+#if defined(__APPLE__)
+// Mac ABI (R22, rows Localization_LoadOnScreens and Localization_LoadSubtitles, same shape, read-only matcher): a plain function with the
+// path in x0 and the Handle returned through x8, so there is no out argument.
+constexpr auto LoadTexts = Core::RawFunc<
+    /* addr = */ Red::AddressLib::Localization_LoadOnScreens,
+    /* type = */ Red::Handle<Red::localization::PersistenceOnScreenEntries> (*)(Red::ResourcePath aPath)>();
+
+constexpr auto LoadSubtitles = Core::RawFunc<
+    /* addr = */ Red::AddressLib::Localization_LoadSubtitles,
+    /* type = */ Red::Handle<Red::localization::PersistenceSubtitleMap> (*)(Red::ResourcePath aPath)>();
+#else
 constexpr auto LoadTexts = Core::RawFunc<
     /* addr = */ Red::AddressLib::Localization_LoadOnScreens,
     /* type = */ uint64_t (*)(Red::Handle<Red::localization::PersistenceOnScreenEntries>& aOut,
@@ -20,6 +31,7 @@ constexpr auto LoadSubtitles = Core::RawFunc<
     /* addr = */ Red::AddressLib::Localization_LoadSubtitles,
     /* type = */ uint64_t (*)(Red::Handle<Red::localization::PersistenceSubtitleMap>& aOut,
                               Red::ResourcePath aPath)>();
+#endif
 
 constexpr auto LoadVoiceOvers = Core::RawFunc<
     /* addr = */ Red::AddressLib::Localization_LoadVoiceOvers,

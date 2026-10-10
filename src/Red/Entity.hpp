@@ -107,9 +107,14 @@ namespace Raw::IComponent
 // using Owner = Core::OffsetPtr<0x50, Red::Entity*>;
 // using AppearancePath = Core::OffsetPtr<0x68, Red::ResourcePath>;
 
+// Mac slot 0x288 (0xC699AC), proven on entMeshComponent and entSkinnedMeshComponent, the only components ArchiveXL calls it on.
 constexpr auto UpdateRenderer = Core::RawVFunc<
     /* offset = */ 0x280,
-    /* type = */ void (Red::IComponent::*)()>();
+    /* type = */ void (Red::IComponent::*)()
+#if defined(__APPLE__)
+    , /* verified on Mac = */ true
+#endif
+    >();
 }
 
 namespace Raw::IPlacedComponent

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Red/Common.hpp"
 #include "Red/Entity.hpp"
 
 namespace Red
@@ -94,26 +95,79 @@ struct GarmentExtractionParams
     Handle<entEntityTemplate> partTemplate;      // 00
     SharedPtr<GarmentProcessingContext> context; // 10
 };
+
+#if defined(__APPLE__)
+// macOS (R22): the second stage of the Mac garment extraction job (0xAE6660) takes a 0x30 byte block from the Jobs2Data pool: the same two members
+// plus 16 bytes of flags that the first stage copies from its own closure (bytes 0x30 to 0x3D of it). The function releases the members and frees
+// the block itself before it returns, so it can be called again only with a fresh block from the same pool.
+struct GarmentExtractionParamsMac
+{
+    Handle<entEntityTemplate> partTemplate; // 00
+    GarmentProcessingContext* context;      // 10 (the SharedPtr<GarmentProcessingContext> instance; its control block follows)
+    RefCnt* contextRefs;                    // 18
+    uint8_t flags[0x10];                    // 20
+};
+#endif
 }
 
 namespace Raw::GarmentAssembler
 {
+#if defined(__APPLE__)
+// Mac ABI (R22): the 0x18 byte state comes back through x8 and the Windows out argument is gone. A HookAfter callback takes it as the tail
+// observer `(GarmentAssemblerState&, uintptr_t, WeakHandle<Entity>&)`.
+constexpr auto FindState = Core::RawFunc<
+    /* addr = */ Red::AddressLib::GarmentAssembler_FindState,
+    /* type = */ Red::GarmentAssemblerState (*)(uintptr_t, Red::WeakHandle<Red::ent::Entity>&)>();
+
+// Mac only: the aggregator level change wrappers (x0 = aggregator, x1 = the entity as given to FindState, x2 = the request). The game never
+// calls the state level ChangeItem / ChangeCustomItem rows on the Mac.
+constexpr auto ChangeItem = Core::RawFunc<
+    /* addr = */ Red::AddressLib::GarmentAssembler_ChangeItem,
+    /* type = */ bool (*)(uintptr_t, Red::WeakHandle<Red::ent::Entity>&, Red::GarmentItemChangeRequest&)>();
+
+constexpr auto ChangeCustomItem = Core::RawFunc<
+    /* addr = */ Red::AddressLib::GarmentAssembler_ChangeCustomItem,
+    /* type = */ bool (*)(uintptr_t, Red::WeakHandle<Red::ent::Entity>&, Red::GarmentItemChangeCustomRequest&)>();
+#else
 constexpr auto FindState = Core::RawFunc<
     /* addr = */ Red::AddressLib::GarmentAssembler_FindState,
     /* type = */ uintptr_t (*)(uintptr_t, Red::GarmentAssemblerState* aOut, Red::WeakHandle<Red::ent::Entity>&)>();
+#endif
 
 constexpr auto RemoveItem = Core::RawFunc<
     /* addr = */ Red::AddressLib::GarmentAssembler_RemoveItem,
     /* type = */ bool (*)(uintptr_t, Red::WeakHandle<Red::ent::Entity>&, Red::GarmentItemRemoveRequest&)>();
 
+#if defined(__APPLE__)
+// Mac ABI (R22): the SharedPtr<GarmentProcessingContext> comes back through x8 (the Windows out argument is gone), a2 is a pointer to the
+// Handle<AppearanceDefinition> and a3 a small zeroed local. The result is carried as raw bytes: this code never owns it.
+using GarmentProcessorResult = Red::SretValue<0x10>;
+
+inline Red::GarmentProcessingContext* GetProcessor(const GarmentProcessorResult& aResult)
+{
+    return *reinterpret_cast<Red::GarmentProcessingContext* const*>(aResult.data);
+}
+
+constexpr auto ProcessGarment = Core::RawFunc<
+    /* addr = */ Red::AddressLib::GarmentAssembler_ProcessGarment,
+    /* type = */ GarmentProcessorResult (*)(uintptr_t a2, uintptr_t a3, Red::GarmentLoadingParams* aParams)>();
+#else
 constexpr auto ProcessGarment = Core::RawFunc<
     /* addr = */ Red::AddressLib::GarmentAssembler_ProcessGarment,
     /* type = */ uintptr_t (*)(Red::SharedPtr<Red::GarmentProcessingContext>& aProcessor, uintptr_t a2, uintptr_t a3,
                                Red::GarmentLoadingParams* aParams)>();
+#endif
 
+#if defined(__APPLE__)
+// Mac (R22, 0xAE6660 = the body twin of Windows 0x27399C; the fork DB row 0xAE6348 is the first stage). The function consumes its block.
+constexpr auto ExtractComponentsJob = Core::RawFunc<
+    /* addr = */ Red::AddressLib::GarmentAssembler_ExtractComponentsJob,
+    /* type = */ void (*)(Red::GarmentExtractionParamsMac* aParams, const Red::JobGroup& aJobGroup)>();
+#else
 constexpr auto ExtractComponentsJob = Core::RawFunc<
     /* addr = */ Red::AddressLib::GarmentAssembler_ExtractComponentsJob,
     /* type = */ void (*)(Red::GarmentExtractionParams* aParams, const Red::JobGroup& aJobGroup)>();
+#endif
 
 using ProcessMesh = void (*)(Red::GarmentProcessingContext* aProcessor,
                              uint32_t aIndex,
@@ -130,9 +184,16 @@ constexpr auto ProcessMorphedMesh = Core::RawFunc<
     /* addr = */ Red::AddressLib::GarmentAssembler_ProcessMorphedMesh,
     /* type = */ ProcessMesh>();
 
+#if defined(__APPLE__)
+// Mac (R22): the real twin of the Windows reset routine, (this, a2); x1 is passed through to the callee.
+constexpr auto OnGameDetach = Core::RawFunc<
+    /* addr = */ Red::AddressLib::GarmentAssembler_OnGameDetach,
+    /* type = */ void (*)(uintptr_t, uintptr_t)>();
+#else
 constexpr auto OnGameDetach = Core::RawFunc<
     /* addr = */ Red::AddressLib::GarmentAssembler_OnGameDetach,
     /* type = */ void (*)(uintptr_t)>();
+#endif
 }
 
 namespace Raw::GarmentAssemblerState

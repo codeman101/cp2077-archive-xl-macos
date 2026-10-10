@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "App/Extensions/ExtensionBase.hpp"
 #include "App/Extensions/Customization/Config.hpp"
 #include "Red/AppearanceChanger.hpp"
@@ -39,12 +41,40 @@ public:
                                            Red::DynArray<Red::Handle<Red::ISerializable>>& aComponents);
     static bool IsFixedCustomizationAppearance(const Red::Handle<Red::AppearanceDefinition>& aDefinition);
 
+#if defined(__APPLE__)
+    // R22 (CODEWARE_MAC_DIAG=1, read-only): how often each hook ran.
+    static void LogMacStats(const char* aWhere);
+#endif
+
 private:
+#if defined(__APPLE__)
+    enum Hit : size_t
+    {
+        HitActivate,
+        HitDeactivate,
+        HitEnsureState,
+        HitAppOption,
+        HitMorphOption,
+        HitSwitcherOption,
+        HitGetAppearances,
+        HitChangeAppearance,
+        HitChangeAppearances,
+        HitCount
+    };
+    inline static std::atomic<uint32_t> s_hits[HitCount];
+#endif
+
     void OnActivateSystem(CustomizationSystem* aSystem, CustomizationPuppet& aPuppet, bool aIsMale, uintptr_t a4);
     void OnDeactivateSystem(CustomizationSystem* aSystem);
+#if defined(__APPLE__)
+    // macOS: GetResource has no callers (its three uses are inlined), so the merge runs from the Initialize handler and from a hook on
+    // EnsureState, which are two of the inlined sites.
+    void OnEnsureState(CustomizationSystem* aSystem, Red::Handle<Red::gameuiCharacterCustomizationState>* aState);
+#else
     void OnPrepareResource(CustomizationSystem* aSystem,
                            Red::SharedPtr<Red::ResourceToken<Red::gameuiCharacterCustomizationInfoResource>>& aOut,
                            bool aIsMale);
+#endif
     void OnInitAppOption(CustomizationSystem* aSystem,
                          CustomizationPart aPartType,
                          CustomizationStateOption& aOption,
@@ -62,6 +92,18 @@ private:
                               Red::Map<Red::CName, CustomizationStateOption>& aUiSlots);
     void OnGetAppearances(Red::gameuiICharacterCustomizationState* aState, Red::CName aGroupName, bool aIsFPP,
                           Red::DynArray<Red::AppearanceDescriptor>& aAppearances);
+#if defined(__APPLE__)
+    // macOS: ChangeAppearance has a fourth bool argument, ChangeAppearances takes both ranges by value (see Red/AppearanceChanger.hpp).
+    void OnChangeAppearance(AppearanceChangerSystem& aSystem,
+                            Red::AppearanceChangeRequest* aRequest,
+                            uintptr_t a3, bool a4);
+    void OnChangeAppearances(AppearanceChangerSystem& aSystem,
+                             CustomizationPuppet& aPuppet,
+                             Red::Range<Red::AppearanceDescriptor> aOldApp,
+                             Red::Range<Red::AppearanceDescriptor> aNewApp,
+                             uintptr_t a5,
+                             uint8_t a6);
+#else
     void OnChangeAppearance(AppearanceChangerSystem& aSystem,
                             Red::AppearanceChangeRequest* aRequest,
                             uintptr_t a3);
@@ -71,6 +113,7 @@ private:
                             Red::Range<Red::AppearanceDescriptor>& aNewApp,
                             uintptr_t a5,
                             uint8_t a6);
+#endif
 
     void RegisterCustomEntryName(Red::CName aName);
     void RegisterCustomEntryName(Red::CName aName, const Red::CString& aSubName);

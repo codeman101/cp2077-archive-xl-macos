@@ -42,6 +42,52 @@ RED4EXT_ASSERT_SIZE(InkSpawningInfo, 0x40);
 RED4EXT_ASSERT_OFFSET(InkSpawningInfo, context, 0x38);
 }
 
+#if defined(__APPLE__)
+// Mac ABI (R20 in Codeware, same rows). SpawnFromLocal/SpawnFromExternal return their Handle through x8 and have no out argument; the two Async*
+// functions take one more bool than the Windows declarations (a real flag on AsyncSpawnFromLocal, 0 from the game's callers on
+// AsyncSpawnFromExternal). FinishAsyncSpawn is the call operator of the std::function behind InkSpawningInfo and returns nothing.
+namespace Raw::InkWidgetLibrary
+{
+constexpr auto SpawnFromLocal = Core::RawFunc<
+    /* addr = */ Red::AddressLib::InkWidgetLibrary_SpawnFromLocal,
+    /* type = */ Red::Handle<Red::ink::WidgetLibraryItemInstance> (*)(
+        Red::ink::WidgetLibraryResource& aLibrary,
+        Red::CName aItemName)>();
+
+constexpr auto SpawnFromExternal = Core::RawFunc<
+    /* addr = */ Red::AddressLib::InkWidgetLibrary_SpawnFromExternal,
+    /* type = */ Red::Handle<Red::ink::WidgetLibraryItemInstance> (*)(
+        Red::ink::WidgetLibraryResource& aLibrary,
+        Red::ResourcePath aExternalPath,
+        Red::CName aItemName)>();
+
+constexpr auto AsyncSpawnFromLocal = Core::RawFunc<
+    /* addr = */ Red::AddressLib::InkWidgetLibrary_AsyncSpawnFromLocal,
+    /* type = */ bool (*)(
+        Red::ink::WidgetLibraryResource& aLibrary,
+        Red::InkSpawningInfo& aSpawningInfo,
+        Red::CName aItemName,
+        bool aFlag)>();
+
+constexpr auto AsyncSpawnFromExternal = Core::RawFunc<
+    /* addr = */ Red::AddressLib::InkWidgetLibrary_AsyncSpawnFromExternal,
+    /* type = */ bool (*)(
+        Red::ink::WidgetLibraryResource& aLibrary,
+        Red::InkSpawningInfo& aSpawningInfo,
+        Red::ResourcePath aExternalPath,
+        Red::CName aItemName,
+        bool aFlag)>();
+}
+
+namespace Raw::InkSpawner
+{
+constexpr auto FinishAsyncSpawn = Core::RawFunc<
+    /* addr = */ Red::AddressLib::InkSpawner_FinishAsyncSpawn,
+    /* type = */ void (*)(
+        Red::InkSpawningContext& aContext,
+        Red::Handle<Red::ink::WidgetLibraryItemInstance>& aInstance)>();
+}
+#else
 namespace Raw::InkWidgetLibrary
 {
 constexpr auto AsyncSpawnFromExternal = Core::RawFunc<
@@ -83,3 +129,4 @@ constexpr auto FinishAsyncSpawn = Core::RawFunc<
         Red::InkSpawningContext& aContext,
         Red::Handle<Red::ink::WidgetLibraryItemInstance>& aInstance)>();
 }
+#endif

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "App/Extensions/ExtensionBase.hpp"
 #include "App/Extensions/ResourcePatch/Config.hpp"
 #include "App/Shared/ResourcePathRegistry.hpp"
@@ -70,10 +72,26 @@ private:
     static void OnAppearanceResourceLoad(Red::AppearanceResource* aResource, Red::PostLoadParams*);
     static void OnMeshResourceLoad(Red::CMesh* aMesh, Red::PostLoadParams* aParams);
     static void OnMorphTargetResourceLoad(Red::MorphTargetMesh* aMorphTarget, Red::PostLoadParams* aParams);
+#if defined(__APPLE__)
+    static void OnEntityPackageLoad(Red::EntityBuilder* aBuilder, Red::JobQueue& aJobQueue);
+#else
     static void OnEntityPackageLoad(Red::JobQueue& aJobQueue, void*, Red::EntityBuilderJobParams* aParams);
+#endif
     static void OnPartPackageExtract(Red::DynArray<Red::Handle<Red::ISerializable>>& aResultObjects,
                                      const Red::SharedPtr<Red::ResourceToken<Red::EntityTemplate>>& aPartToken);
+#if defined(__APPLE__)
+    // Mac: a full hook. The extraction job frees its block before it returns, so what the after-logic needs is copied out first and each extra
+    // extraction runs on a fresh block from the Jobs2Data pool.
+    static void OnGarmentPackageExtract(Red::GarmentExtractionParamsMac* aParams, const Red::JobGroup& aJobGroup);
+public:
+    static void LogMacStats(const char* aWhere);
+
+private:
+    inline static std::atomic<uint32_t> s_garmentExtractHits{0};
+    inline static std::atomic<uint32_t> s_garmentExtractPatched{0};
+#else
     static void OnGarmentPackageExtract(Red::GarmentExtractionParams* aParams, const Red::JobGroup& aJobGroup);
+#endif
     static void OnStreamingWorldLoad(Red::worldStreamingWorld* aWorld);
     static void OnCurveSetResourceLoad(Red::CurveSet* aResource);
     static void OnDeviceResourceLoad(Red::gameDeviceResource* aResource);

@@ -3,6 +3,9 @@
 #include "App/Extensions/ResourcePatch/Extension.hpp"
 #include "App/Utils/Str.hpp"
 #include "Core/Facades/Container.hpp"
+#if defined(__APPLE__)
+#include "MacDiag.hpp"
+#endif
 
 namespace
 {
@@ -27,6 +30,10 @@ bool App::MeshExtension::Load()
     Hook<Raw::CMesh::LoadMaterialsAsync>(&OnLoadMaterials).OrThrow();
     Hook<Raw::CMesh::AddStubAppearance>(&OnAddStubAppearance).OrThrow();
     Hook<Raw::CMesh::ShouldPreloadAppearances>(&OnPreloadAppearances).OrThrow();
+#if defined(__APPLE__)
+    // CMesh::PostLoad inlines the preload test on macOS, so the action behind it needs the same rule.
+    Hook<Raw::CMesh::PreloadAppearances>(&OnPreloadAction).OrThrow();
+#endif
 
     s_dummyMesh = Red::MakeHandle<Red::CMesh>();
     s_dummyAppearance = Red::MakeHandle<Red::meshMeshAppearance>();
@@ -52,6 +59,9 @@ bool App::MeshExtension::Unload()
     Unhook<Raw::CMesh::LoadMaterialsAsync>();
     Unhook<Raw::CMesh::AddStubAppearance>();
     Unhook<Raw::CMesh::ShouldPreloadAppearances>();
+#if defined(__APPLE__)
+    Unhook<Raw::CMesh::PreloadAppearances>();
+#endif
 
     return true;
 }
@@ -59,6 +69,9 @@ bool App::MeshExtension::Unload()
 void App::MeshExtension::OnFindAppearance(Red::Handle<Red::meshMeshAppearance>& aAppearance, Red::CMesh* aMesh,
                                           Red::CName aName)
 {
+#if defined(__APPLE__)
+    Mac::Count(s_findHits);
+#endif
     if (!aAppearance)
         return;
 
@@ -169,6 +182,9 @@ void App::MeshExtension::ProcessAppearance(Red::CMesh* aMesh, const Core::Shared
 
 void App::MeshExtension::OnAddStubAppearance(Red::CMesh* aMesh)
 {
+#if defined(__APPLE__)
+    Mac::Count(s_stubHits);
+#endif
     if (!aMesh->renderResourceBlob || aMesh->surfaceAreaPerAxis.X < 0.0)
     {
         Raw::CMesh::AddStubAppearance(aMesh);
@@ -177,6 +193,9 @@ void App::MeshExtension::OnAddStubAppearance(Red::CMesh* aMesh)
 
 bool App::MeshExtension::OnPreloadAppearances(Red::CMesh* aMesh)
 {
+#if defined(__APPLE__)
+    Mac::Count(s_preloadHits);
+#endif
     if (!aMesh || !aMesh->path || aMesh->appearances.IsEmpty() || aMesh->materialEntries.IsEmpty() ||
         aMesh->appearances[0]->chunkMaterials.IsEmpty())
         return false;
@@ -201,14 +220,64 @@ bool App::MeshExtension::OnPreloadAppearances(Red::CMesh* aMesh)
     return preload;
 }
 
+#if defined(__APPLE__)
+// macOS: CMesh::PostLoad inlines ShouldPreloadAppearances, so the preload action behind it applies the same rule as OnPreloadAppearances
+// above (1.27: no preload when the first appearance has no chunk materials or the mesh has a dynamic mesh state).
+bool App::MeshExtension::IsPreloadBlocked(Red::CMesh* aMesh)
+{
+    return aMesh->appearances[0]->chunkMaterials.IsEmpty() || HasMeshState(aMesh);
+}
+#endif
+
+#if defined(__APPLE__)
+void App::MeshExtension::OnPreloadAction(Red::CMesh* aMesh, uint32_t a2, void* aRequest)
+{
+    Mac::Count(s_preloadActionHits);
+
+    // The game already passed its own test when it got here (the single caller sits behind the inlined ShouldPreloadAppearances).
+    if (!aMesh || !aMesh->path || aMesh->appearances.IsEmpty() || aMesh->materialEntries.IsEmpty() || IsPreloadBlocked(aMesh))
+    {
+        Mac::Count(s_preloadBlocked);
+        return;
+    }
+
+    Raw::CMesh::PreloadAppearances(aMesh, a2, aRequest);
+}
+
+void App::MeshExtension::LogMacStats(const char* aWhere)
+{
+    MAC_DIAG("[selftest] R22 Mesh %s: dummy mesh=%d dummy appearance=%d owner set=%d; hooks ran: FindAppearance %u, LoadMaterialsAsync %u, AddStubAppearance %u, ShouldPreload %u, preload action %u (blocked %u)\n",
+             aWhere, s_dummyMesh ? 1 : 0, s_dummyAppearance ? 1 : 0,
+             (s_dummyAppearance && Raw::MeshAppearance::Owner::Ref(s_dummyAppearance.instance) == s_dummyMesh.instance) ? 1 : 0,
+             s_findHits.load(), s_materialsHits.load(), s_stubHits.load(), s_preloadHits.load(), s_preloadActionHits.load(),
+             s_preloadBlocked.load());
+}
+#endif
+
+#if defined(__APPLE__)
+Red::MeshMaterialsToken App::MeshExtension::OnLoadMaterials(Red::CMesh* aTargetMesh,
+                                                            const Red::DynArray<Red::CName>& aMaterialNames, uint8_t a4)
+{
+    // Mac: the token is the result (x8), the Windows out argument is gone.
+    Mac::Count(s_materialsHits);
+    Red::MeshMaterialsToken token = Raw::CMesh::LoadMaterialsAsync(aTargetMesh, aMaterialNames, a4);
+    Red::MeshMaterialsToken& aToken = token;
+#else
 void* App::MeshExtension::OnLoadMaterials(Red::CMesh* aTargetMesh, Red::MeshMaterialsToken& aToken,
                                           const Red::DynArray<Red::CName>& aMaterialNames, uint8_t a4)
 {
     Raw::CMesh::LoadMaterialsAsync(aTargetMesh, aToken, aMaterialNames, a4);
+#endif
 
     if (!aTargetMesh->path || aMaterialNames.IsEmpty() || aToken.data->materials.Size() != aMaterialNames.Size() ||
         !ContainsUnresolvedMaterials(aToken.data->materials))
+    {
+#if defined(__APPLE__)
+        return token;
+#else
         return &aToken;
+#endif
+    }
 
     Red::JobQueue jobQueue;
     jobQueue.Wait(aToken.job);
@@ -277,7 +346,11 @@ void* App::MeshExtension::OnLoadMaterials(Red::CMesh* aTargetMesh, Red::MeshMate
 
     aToken.job = std::move(jobQueue.Capture());
 
+#if defined(__APPLE__)
+    return token;
+#else
     return &aToken;
+#endif
 }
 
 void App::MeshExtension::ProcessDynamicMaterials(const Core::SharedPtr<DynamicContext>& aContext,
@@ -401,9 +474,14 @@ void App::MeshExtension::ProcessDynamicMaterials(const Core::SharedPtr<DynamicCo
         {
             if (sourceEntry.isLocalInstance)
             {
+#if defined(__APPLE__)
+                chunk->sourceToken = Raw::MeshMaterialBuffer::LoadMaterialAsync(&aContext->sourceMesh->localMaterialBuffer,
+                                                                                aContext->sourceMesh, sourceEntry.index, 0, 0);
+#else
                 Raw::MeshMaterialBuffer::LoadMaterialAsync(&aContext->sourceMesh->localMaterialBuffer,
                                                            chunk->sourceToken, aContext->sourceMesh,
                                                            sourceEntry.index, 0, 0);
+#endif
 
                 if (!chunk->sourceToken || chunk->sourceToken->IsFailed())
                 {
@@ -1081,8 +1159,13 @@ void App::MeshExtension::MeshState::PrefetchContext(Red::CMesh* aMesh)
     auto contextIndex = GetTemplateEntryIndex(ContextMaterialName);
     if (contextIndex == 0)
     {
+#if defined(__APPLE__)
+        contextToken = Raw::MeshMaterialBuffer::LoadMaterialAsync(&aMesh->localMaterialBuffer, Red::AsHandle(aMesh),
+                                                                  aMesh->materialEntries[contextIndex].index, 0, 0);
+#else
         Raw::MeshMaterialBuffer::LoadMaterialAsync(&aMesh->localMaterialBuffer, contextToken, Red::AsHandle(aMesh),
                                                    aMesh->materialEntries[contextIndex].index, 0, 0);
+#endif
     }
 }
 

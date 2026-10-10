@@ -7,6 +7,9 @@
 #include "Red/AppearanceChanger.hpp"
 #include "Red/CharacterCustomization.hpp"
 #include "Red/TweakDB.hpp"
+#if defined(__APPLE__)
+#include "MacDiag.hpp"
+#endif
 
 namespace
 {
@@ -659,6 +662,116 @@ void App::DynamicAppearanceController::RemoveState(Red::Entity* aEntity)
     m_states.erase(aEntity);
 }
 
+#if defined(__APPLE__)
+namespace
+{
+// Probe records: one Item record per suffix with `.appearanceSuffixes` = [suffix]; GetSuffixes then yields "<separator><value>" for that suffix only.
+Core::Map<Red::TweakDBID, Red::TweakDBID> s_probeRecords;
+std::atomic<uint32_t> s_probeCalls{0};
+std::atomic<uint32_t> s_probeEmpty{0};
+}
+
+void App::DynamicAppearanceController::CreateSuffixProbes()
+{
+    s_probeRecords.clear();
+
+    for (const auto suffixID : {GenderSuffix, CameraSuffix, InnerSleevesSuffix, HairTypeSuffix})
+    {
+        if (!Red::RecordExists(suffixID))
+            continue;
+
+        const auto probeID = Red::TweakDBID(("ArchiveXL.SuffixProbe." + std::to_string(suffixID.value)).c_str());
+
+        if (!Red::RecordExists(probeID))
+        {
+            Red::DynArray<Red::TweakDBID> suffixes;
+            suffixes.EmplaceBack(suffixID);
+            Red::CreateFlat(probeID, ".appearanceSuffixes", std::move(suffixes));
+            Red::CreateRecord(probeID, "Item");
+            Red::UpdateRecord(probeID);
+        }
+
+        s_probeRecords[suffixID] = probeID;
+    }
+
+    const auto* order = Red::GetFlatPtr<Red::DynArray<Red::TweakDBID>>(
+        {Red::TweakDBID("itemsFactoryAppearanceSuffix.ItemsFactoryAppearanceSuffixOrderDefault"), ".appearanceSuffixes"});
+    uint32_t listed = 0;
+    for (const auto& probe : s_probeRecords)
+        listed += (order && order->Contains(probe.first)) ? 1 : 0;
+
+    MAC_DIAG("[selftest] R22 Garment suffix probes: %zu probe record(s) created, %u of them in the suffix order list (%u entries)\n",
+             s_probeRecords.size(), listed, order ? order->size : 0u);
+}
+
+std::string App::DynamicAppearanceController::GetSuffixValue(Red::Handle<Red::GameObject>& aOwner, Red::TweakDBID aEquippedItemID,
+                                                             Red::TweakDBID aSuffixID)
+{
+    const auto owner = Red::ToWeakHandle(aOwner);
+
+    if (aSuffixID == BodyTypeSuffix)
+    {
+        return App::PuppetStateExtension::GetBodyType(owner).ToString();
+    }
+
+    if (aSuffixID == ArmsStateSuffix)
+    {
+        switch (App::PuppetStateExtension::GetArmsState(owner))
+        {
+        case App::PuppetArmsState::BaseArms: return "BaseArms";
+        case App::PuppetArmsState::MantisBlades: return "MantisBlades";
+        case App::PuppetArmsState::Monowire: return "Monowire";
+        case App::PuppetArmsState::ProjectileLauncher: return "ProjectileLauncher";
+        default: return "";
+        }
+    }
+
+    if (aSuffixID == FeetStateSuffix)
+    {
+        switch (App::PuppetStateExtension::GetFeetState(owner))
+        {
+        case App::PuppetFeetState::Flat: return "Flat";
+        case App::PuppetFeetState::Lifted: return "Lifted";
+        case App::PuppetFeetState::HighHeels: return "HighHeels";
+        case App::PuppetFeetState::FlatShoes: return "FlatShoes";
+        default: return "";
+        }
+    }
+
+    const auto probe = s_probeRecords.find(aSuffixID);
+    if (probe == s_probeRecords.end() || !aOwner)
+        return "";
+
+    auto record = Red::TweakDB::Get()->GetRecord(probe->second);
+    if (!record)
+        return "";
+
+    Red::Handle<Red::GameObject> noOverride;
+    Red::Handle<Red::TweakDBRecord> recordHandle(reinterpret_cast<Red::TweakDBRecord*>(record.instance));
+    const Red::ItemID itemID{aEquippedItemID};
+
+    Mac::Count(s_probeCalls);
+
+    // Raw::...::GetSuffixes is the original function (the Garment hook is bypassed), which is what the Windows code used for GetSuffixValue.
+    const auto suffixes = Raw::AppearanceChanger::GetSuffixes(aOwner, noOverride, recordHandle, itemID);
+
+    // "<separator><value>": drop the separator character.
+    if (suffixes.Length() < 2)
+    {
+        Mac::Count(s_probeEmpty);
+        return "";
+    }
+
+    return suffixes.c_str() + 1;
+}
+
+void App::DynamicAppearanceController::LogMacStats(const char* aWhere)
+{
+    MAC_DIAG("[selftest] R22 Garment suffix probes %s: %zu probe record(s); GetSuffixes calls %u, empty results %u\n", aWhere,
+             s_probeRecords.size(), s_probeCalls.load(), s_probeEmpty.load());
+}
+#endif
+
 App::DynamicAttributeData App::DynamicAppearanceController::GetSuffixData(Red::Entity* aEntity,
                                                                           Red::TweakDBID aSuffixID,
                                                                           Red::TweakDBID aEquippedItemID) const
@@ -670,7 +783,12 @@ App::DynamicAttributeData App::DynamicAppearanceController::GetSuffixData(Red::E
         auto* handle = reinterpret_cast<Red::Handle<Red::GameObject>*>(&aEntity->ref);
 
         Red::CString suffixValue;
+#if defined(__APPLE__)
+        // macOS: GetSuffixValue is inlined into GetSuffixes; see the suffix evaluation port (R22, group c).
+        suffixValue = GetSuffixValue(*handle, aEquippedItemID, aSuffixID).c_str();
+#else
         (~Raw::AppearanceChanger::GetSuffixValue)({aEquippedItemID}, 1ull, *handle, aSuffixID, suffixValue);
+#endif
 
         data.suffix = suffixValue.c_str();
     }
@@ -719,7 +837,32 @@ App::DynamicAppearanceController::CustomizationData App::DynamicAppearanceContro
 
     auto system = Red::GetGameSystem<Red::game::ui::ICharacterCustomizationSystem>();
 
+#if defined(__APPLE__)
+    // macOS: GetHairColor is inlined into its only caller; the sequence is repeated here (see Red/CharacterCustomization.hpp).
+    if (auto systemHandle = system->ref.Lock())
+    {
+        auto* customizationSystem = reinterpret_cast<Red::gameuiICharacterCustomizationSystem*>(systemHandle.instance);
+        auto state = Raw::CharacterCustomizationSystem::GetState(customizationSystem, data.isMale);
+
+        if (state)
+        {
+            const auto* hairColors = Red::GetFlatPtr<Red::DynArray<Red::CName>>(Red::TweakDBID("ItemFactory.HairColors.hairColors"));
+            if (hairColors)
+            {
+                for (const auto& hairColor : *hairColors)
+                {
+                    if (Raw::CharacterCustomizationState::IsColorAvailable(state.instance, hairColor))
+                    {
+                        data.hairColor = hairColor;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+#else
     Raw::CharacterCustomizationHelper::GetHairColor(data.hairColor, system->ref, data.isMale);
+#endif
 
     if (!data.nailsColor)
     {

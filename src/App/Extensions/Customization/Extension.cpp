@@ -1,4 +1,8 @@
 #include "Extension.hpp"
+#if defined(__APPLE__)
+#include "App/Utils/MacProbe.hpp"
+#include "MacDiag.hpp"
+#endif
 #include "App/Extensions/ResourceLink/Extension.hpp"
 #include "App/Extensions/ResourceMeta/Extension.hpp"
 #include "Red/AppearanceResource.hpp"
@@ -21,11 +25,30 @@ std::string_view App::CustomizationExtension::GetName()
     return ExtensionName;
 }
 
+#if defined(__APPLE__)
+void App::CustomizationExtension::LogMacStats(const char* aWhere)
+{
+    MAC_DIAG("[selftest] R22 Customization %s: hooks ran: activate %u, deactivate %u, ensure state %u, app option %u, morph option %u, switcher option %u, "
+             "get appearances %u, change appearance %u, change appearances %u\n",
+             aWhere, s_hits[HitActivate].load(), s_hits[HitDeactivate].load(), s_hits[HitEnsureState].load(), s_hits[HitAppOption].load(),
+             s_hits[HitMorphOption].load(), s_hits[HitSwitcherOption].load(), s_hits[HitGetAppearances].load(),
+             s_hits[HitChangeAppearance].load(), s_hits[HitChangeAppearances].load());
+}
+#endif
+
 bool App::CustomizationExtension::Load()
 {
+#if defined(__APPLE__)
+    MacProbe::AddStats(&LogMacStats);
+#endif
+
     HookBefore<Raw::CharacterCustomizationSystem::Initialize>(&CustomizationExtension::OnActivateSystem).OrThrow();
     HookBefore<Raw::CharacterCustomizationSystem::Uninitialize>(&CustomizationExtension::OnDeactivateSystem).OrThrow();
+#if defined(__APPLE__)
+    HookBefore<Raw::CharacterCustomizationSystem::EnsureState>(&CustomizationExtension::OnEnsureState).OrThrow();
+#else
     HookBefore<Raw::CharacterCustomizationSystem::GetResource>(&CustomizationExtension::OnPrepareResource).OrThrow();
+#endif
     HookBefore<Raw::CharacterCustomizationSystem::InitializeAppOption>(&CustomizationExtension::OnInitAppOption).OrThrow();
     HookBefore<Raw::CharacterCustomizationSystem::InitializeMorphOption>(&CustomizationExtension::OnInitMorphOption).OrThrow();
     HookAfter<Raw::CharacterCustomizationSystem::InitializeSwitcherOption>(&CustomizationExtension::OnInitSwitcherOption).OrThrow();
@@ -50,7 +73,11 @@ bool App::CustomizationExtension::Unload()
 {
     Unhook<Raw::CharacterCustomizationSystem::Initialize>();
     Unhook<Raw::CharacterCustomizationSystem::Uninitialize>();
+#if defined(__APPLE__)
+    Unhook<Raw::CharacterCustomizationSystem::EnsureState>();
+#else
     Unhook<Raw::CharacterCustomizationSystem::GetResource>();
+#endif
     Unhook<Raw::CharacterCustomizationSystem::InitializeAppOption>();
     Unhook<Raw::CharacterCustomizationSystem::InitializeMorphOption>();
     Unhook<Raw::CharacterCustomizationSystem::InitializeSwitcherOption>();
@@ -80,19 +107,41 @@ void App::CustomizationExtension::Reload()
 void App::CustomizationExtension::OnActivateSystem(App::CustomizationSystem* aSystem, App::CustomizationPuppet& aPuppet,
                                                    bool aIsMale, uintptr_t a4)
 {
+#if defined(__APPLE__)
+    Mac::Count(s_hits[HitActivate]);
+#endif
     m_customizationActive = true;
+
+#if defined(__APPLE__)
+    // The original reads the base resources right after this hook (inlined GetResource), so the custom entries are merged first.
+    MergeCustomEntries(aSystem);
+#endif
 }
 
 void App::CustomizationExtension::OnDeactivateSystem(App::CustomizationSystem* aSystem)
 {
+#if defined(__APPLE__)
+    Mac::Count(s_hits[HitDeactivate]);
+#endif
     m_customizationActive = false;
 }
 
+#if defined(__APPLE__)
+void App::CustomizationExtension::OnEnsureState(App::CustomizationSystem* aSystem,
+                                                Red::Handle<Red::gameuiCharacterCustomizationState>* aState)
+{
+#if defined(__APPLE__)
+    Mac::Count(s_hits[HitEnsureState]);
+#endif
+    MergeCustomEntries(aSystem);
+}
+#else
 void App::CustomizationExtension::OnPrepareResource(App::CustomizationSystem* aSystem,
     Red::SharedPtr<Red::ResourceToken<Red::gameuiCharacterCustomizationInfoResource>>& aOut, bool aIsMale)
 {
     MergeCustomEntries(aSystem);
 }
+#endif
 
 void App::CustomizationExtension::OnInitAppOption(App::CustomizationSystem* aSystem,
                                                   App::CustomizationPart aPartType,
@@ -100,6 +149,9 @@ void App::CustomizationExtension::OnInitAppOption(App::CustomizationSystem* aSys
                                                   Red::SortedUniqueArray<Red::CName>& aStateOptions,
                                                   Red::Map<Red::CName, App::CustomizationStateOption>& aUiSlots)
 {
+#if defined(__APPLE__)
+    Mac::Count(s_hits[HitAppOption]);
+#endif
     bool found = aStateOptions.Find(aOption->info->name) != aStateOptions.end();
 
     if (!found && !aOption->info->hidden && aOption->info->enabled)
@@ -116,6 +168,9 @@ void App::CustomizationExtension::OnInitMorphOption(App::CustomizationSystem* aS
                                                     Red::SortedUniqueArray<Red::CName>& aStateOptions,
                                                     Red::Map<Red::CName, App::CustomizationStateOption>& aUiSlots)
 {
+#if defined(__APPLE__)
+    Mac::Count(s_hits[HitMorphOption]);
+#endif
     bool found = aStateOptions.Find(aOption->info->name) != aStateOptions.end();
 
     if (!found && !aOption->info->hidden && aOption->info->enabled)
@@ -133,6 +188,9 @@ void App::CustomizationExtension::OnInitSwitcherOption(App::CustomizationSystem*
                                                        int32_t aCurrentIndex, uint64_t a5,
                                                        Red::Map<Red::CName, App::CustomizationStateOption>& aUiSlots)
 {
+#if defined(__APPLE__)
+    Mac::Count(s_hits[HitSwitcherOption]);
+#endif
     if (!aOption->isActive && !aOption->info->hidden && aOption->info->enabled)
     {
         if (IsCustomEntryName(aOption->info->name))
@@ -146,15 +204,26 @@ void App::CustomizationExtension::OnGetAppearances(Red::gameuiICharacterCustomiz
                                                    Red::CName aGroupName, bool aIsFPP,
                                                    Red::DynArray<Red::AppearanceDescriptor>& aAppearances)
 {
+#if defined(__APPLE__)
+    Mac::Count(s_hits[HitGetAppearances]);
+#endif
     for (auto& app : aAppearances)
     {
         ApplyAppOverride(app);
     }
 }
 
+#if defined(__APPLE__)
+void App::CustomizationExtension::OnChangeAppearance(App::AppearanceChangerSystem& aSystem,
+                                                     Red::AppearanceChangeRequest* aRequest, uintptr_t a3, bool a4)
+#else
 void App::CustomizationExtension::OnChangeAppearance(App::AppearanceChangerSystem& aSystem,
                                                      Red::AppearanceChangeRequest* aRequest, uintptr_t a3)
+#endif
 {
+#if defined(__APPLE__)
+    Mac::Count(s_hits[HitChangeAppearance]);
+#endif
     if (/*m_customizationActive &&*/ !m_customAppOverrides.empty())
     {
         if (aRequest->oldAppearance)
@@ -168,12 +237,23 @@ void App::CustomizationExtension::OnChangeAppearance(App::AppearanceChangerSyste
     }
 }
 
+#if defined(__APPLE__)
+void App::CustomizationExtension::OnChangeAppearances(App::AppearanceChangerSystem& aSystem,
+                                                      App::CustomizationPuppet& aPuppet,
+                                                      Red::Range<Red::AppearanceDescriptor> aOldApp,
+                                                      Red::Range<Red::AppearanceDescriptor> aNewApp,
+                                                      uintptr_t a5, uint8_t a6)
+#else
 void App::CustomizationExtension::OnChangeAppearances(App::AppearanceChangerSystem& aSystem,
                                                       App::CustomizationPuppet& aPuppet,
                                                       Red::Range<Red::AppearanceDescriptor>& aOldApp,
                                                       Red::Range<Red::AppearanceDescriptor>& aNewApp,
                                                       uintptr_t a5, uint8_t a6)
+#endif
 {
+#if defined(__APPLE__)
+    Mac::Count(s_hits[HitChangeAppearances]);
+#endif
     if (/*m_customizationActive &&*/ !m_customAppOverrides.empty())
     {
         if (aOldApp)

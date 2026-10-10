@@ -2,6 +2,21 @@
 
 namespace Red
 {
+#if defined(__APPLE__)
+// macOS (R22): a result the game returns through x8 whose layout and ownership this code never touches. The user-provided destructor makes the
+// type non-trivial for calls, which is what puts it in x8 in clang as in the game; the bytes are forwarded to the caller and never released here.
+template<size_t N>
+struct SretValue
+{
+    SretValue() = default;
+    SretValue(const SretValue&) = default;
+    SretValue& operator=(const SretValue&) = default;
+    ~SretValue() {}
+
+    alignas(8) uint8_t data[N]{};
+};
+#endif
+
 template<typename T>
 using ResourceTokenPtr = Red::SharedPtr<Red::ResourceToken<T>>;
 

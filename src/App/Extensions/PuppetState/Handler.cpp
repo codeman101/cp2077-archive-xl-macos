@@ -355,16 +355,24 @@ App::PuppetStateHandler::SlotState App::PuppetStateHandler::GetItemInSlot(const 
 
 bool App::PuppetStateHandler::IsVisible(const Red::Handle<Red::ItemObject>& aItemObject)
 {
+#if defined(__APPLE__)
+    const Red::CName itemAppearance = Raw::ItemObject::GetAppearanceName(aItemObject);
+#else
     Red::CName itemAppearance;
     Raw::ItemObject::GetAppearanceName(aItemObject, itemAppearance);
+#endif
 
     return itemAppearance && itemAppearance != EmptyAppearanceName;
 }
 
 bool App::PuppetStateHandler::IsDynamicAppearance(const Red::Handle<Red::ItemObject>& aItemObject)
 {
+#if defined(__APPLE__)
+    const Red::CName itemAppearance = Raw::ItemObject::GetAppearanceName(aItemObject);
+#else
     Red::CName itemAppearance;
     Raw::ItemObject::GetAppearanceName(aItemObject, itemAppearance);
+#endif
 
     return DynamicAppearanceName::CheckMark(itemAppearance);
 }

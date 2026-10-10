@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "App/Extensions/ExtensionBase.hpp"
 #include "App/Extensions/Garment/Dynamic.hpp"
 #include "App/Shared/ResourcePathRegistry.hpp"
@@ -21,7 +23,21 @@ public:
     static void PrepareMeshState(Red::CMesh* aMesh, const Core::Map<Red::CName, std::string>& aContext);
     static Red::CName RegisterMeshPatch(Red::CMesh* aMesh, Red::CMesh* aSourceMesh);
 
+#if defined(__APPLE__)
+    // R22 (CODEWARE_MAC_DIAG=1, read-only): the dummy objects and how many times each hook ran.
+    static void LogMacStats(const char* aWhere);
+#endif
+
 private:
+#if defined(__APPLE__)
+    inline static std::atomic<uint32_t> s_findHits{0};
+    inline static std::atomic<uint32_t> s_materialsHits{0};
+    inline static std::atomic<uint32_t> s_stubHits{0};
+    inline static std::atomic<uint32_t> s_preloadHits{0};
+    inline static std::atomic<uint32_t> s_preloadActionHits{0};
+    inline static std::atomic<uint32_t> s_preloadBlocked{0};
+#endif
+
     struct MeshState
     {
         MeshState(Red::CMesh* aMesh);
@@ -87,10 +103,19 @@ private:
     };
 
     static void OnFindAppearance(Red::Handle<Red::mesh::MeshAppearance>& aAppearance, Red::CMesh* aMesh, Red::CName aName);
+#if defined(__APPLE__)
+    static Red::MeshMaterialsToken OnLoadMaterials(Red::CMesh* aTargetMesh, const Red::DynArray<Red::CName>& aMaterialNames,
+                                                   uint8_t a4);
+    static void OnPreloadAction(Red::CMesh* aMesh, uint32_t a2, void* aRequest);
+#else
     static void* OnLoadMaterials(Red::CMesh* aTargetMesh, Red::MeshMaterialsToken& aToken,
                                  const Red::DynArray<Red::CName>& aMaterialNames, uint8_t a4);
+#endif
     static void OnAddStubAppearance(Red::CMesh* aMesh);
     static bool OnPreloadAppearances(Red::CMesh* aMesh);
+#if defined(__APPLE__)
+    static bool IsPreloadBlocked(Red::CMesh* aMesh);
+#endif
 
     static void ProcessAppearance(Red::CMesh* aMesh, const Core::SharedPtr<MeshState>& aMeshState,
                                   const Red::Handle<Red::meshMeshAppearance>& aAppearance);

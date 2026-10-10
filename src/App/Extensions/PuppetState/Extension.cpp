@@ -1,6 +1,9 @@
 #include "Extension.hpp"
 #include "Red/Entity.hpp"
 #include "Red/TweakDB.hpp"
+#if defined(__APPLE__)
+#include "MacDiag.hpp"
+#endif
 
 namespace
 {
@@ -73,9 +76,32 @@ void App::PuppetStateExtension::OnTweakDBReady()
         LegsStateSuffixID,
         FeetStateSuffixID,
     });
+
+#if defined(__APPLE__)
+    // R22 menu self-test (CODEWARE_MAC_DIAG=1, read-only): the records exist, their scripted function names are the ones the game calls, and the
+    // suffix order list holds the four ids.
+    {
+        const auto system = Red::GetFlatValue<Red::CName>({BodyTypeSuffixID, ".scriptedSystem"});
+        const auto function = Red::GetFlatValue<Red::CName>({BodyTypeSuffixID, ".scriptedFunction"});
+        const auto* list = Red::GetFlatPtr<Red::DynArray<Red::TweakDBID>>({SuffixListID, ".appearanceSuffixes"});
+        uint32_t found = 0;
+        if (list)
+        {
+            for (const auto id : {BodyTypeSuffixID, ArmsStateSuffixID, LegsStateSuffixID, FeetStateSuffixID})
+                found += list->Contains(id) ? 1 : 0;
+        }
+        MAC_DIAG("[selftest] R22 PuppetState suffix records: exist=%d%d%d%d system=%s function=%s listed=%u/4 listSize=%u\n",
+                 Red::RecordExists(BodyTypeSuffixID), Red::RecordExists(ArmsStateSuffixID), Red::RecordExists(LegsStateSuffixID),
+                 Red::RecordExists(FeetStateSuffixID), system.ToString(), function.ToString(), found, list ? list->size : 0u);
+    }
+#endif
 }
 
+#if defined(__APPLE__)
+void App::PuppetStateExtension::OnAttachPuppet(Red::gameuiCharacterCustomizationGenitalsController* aComponent, uintptr_t)
+#else
 void App::PuppetStateExtension::OnAttachPuppet(Red::gameuiCharacterCustomizationGenitalsController* aComponent)
+#endif
 {
 #ifndef NDEBUG
     LogDebug("[{}] [event=AttachPuppet ent={}]", ExtensionName, aComponent->owner->entityID.hash);

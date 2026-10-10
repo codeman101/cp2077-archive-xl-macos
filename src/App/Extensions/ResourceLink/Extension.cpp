@@ -1,7 +1,11 @@
 #include "Extension.hpp"
+#include <cstring>
 #include "App/Extensions/ResourceMeta/Extension.hpp"
 #include "App/Shared/ResourcePathRegistry.hpp"
 #include "Core/Facades/Container.hpp"
+#if defined(__APPLE__)
+#include "MacDiag.hpp"
+#endif
 
 namespace
 {
@@ -16,6 +20,9 @@ std::string_view App::ResourceLinkExtension::GetName()
 bool App::ResourceLinkExtension::Load()
 {
     HookBefore<Raw::ResourceLoader::LoadAsync>(&OnLoaderResourceRequest).OrThrow();
+#if defined(__APPLE__)
+    HookWrap<Raw::ResourceLoader::LoadAsyncByPath>(&OnLoaderPathRequest).OrThrow();
+#endif
     Hook<Raw::ResourceDepot::RequestResource>(&OnDepotResourceRequest).OrThrow();
     Hook<Raw::ResourceDepot::CheckResource>(&OnDepotResourceCheck).OrThrow();
 
@@ -25,6 +32,9 @@ bool App::ResourceLinkExtension::Load()
 bool App::ResourceLinkExtension::Unload()
 {
     Unhook<Raw::ResourceLoader::LoadAsync>();
+#if defined(__APPLE__)
+    Unhook<Raw::ResourceLoader::LoadAsyncByPath>();
+#endif
     Unhook<Raw::ResourceDepot::RequestResource>();
     Unhook<Raw::ResourceDepot::CheckResource>();
 
@@ -205,33 +215,72 @@ void App::ResourceLinkExtension::Configure()
     m_configs.clear();
 }
 
+#if defined(__APPLE__)
+void App::ResourceLinkExtension::OnLoaderResourceRequest(Red::ResourceLoader* aLoader, Red::ResourceRequest& aRequest)
+#else
 void App::ResourceLinkExtension::OnLoaderResourceRequest(Red::ResourceLoader* aLoader,
                                                          Red::SharedPtr<Red::ResourceToken<>>& aToken,
                                                          Red::ResourceRequest& aRequest)
+#endif
 {
     std::shared_lock _(s_linksLock);
     const auto& link = s_links.find(aRequest.path);
     if (link != s_links.end())
     {
+#if defined(__APPLE__)
+        Mac::Count(s_loaderHits);
+#endif
         aRequest.path = link->second;
     }
 }
 
+#if defined(__APPLE__)
+// Mac (R22): a second entry for the same redirect. The ByPath function inlines the request function, so the hook on that one never sees
+// the path loads (most LoadAsync(path) and RaRef loads). The handler is a full wrapper because a by-value argument cannot be changed by an observer.
+Red::SharedPtr<Red::ResourceToken<>> App::ResourceLinkExtension::OnLoaderPathRequest(
+    Core::Detail::OriginalFunc<Red::SharedPtr<Red::ResourceToken<>>, Red::ResourceLoader*, Red::ResourcePath> aOriginal,
+    Red::ResourceLoader* aLoader, Red::ResourcePath aPath)
+{
+    {
+        std::shared_lock _(s_linksLock);
+        const auto& link = s_links.find(aPath);
+        if (link != s_links.end())
+        {
+            Mac::Count(s_pathHits);
+            aPath = link->second;
+        }
+    }
+
+    return aOriginal(aLoader, aPath);
+}
+
+Red::DepotResourceHandle App::ResourceLinkExtension::OnDepotResourceRequest(Red::ResourceDepot* aDepot,
+                                                                            Red::ResourcePath aPath,
+                                                                            const int32_t* aArchiveHandle)
+#else
 uintptr_t* App::ResourceLinkExtension::OnDepotResourceRequest(Red::ResourceDepot* aDepot,
                                                               const uintptr_t* aResourceHandle,
                                                               Red::ResourcePath aPath,
                                                               const int32_t* aArchiveHandle)
+#endif
 {
     {
         std::shared_lock _(s_copiesLock);
         const auto& link = s_copies.find(aPath);
         if (link != s_copies.end())
         {
+#if defined(__APPLE__)
+            Mac::Count(s_copyHits);
+#endif
             aPath = link->second;
         }
     }
 
+#if defined(__APPLE__)
+    return Raw::ResourceDepot::RequestResource(aDepot, aPath, aArchiveHandle);
+#else
     return Raw::ResourceDepot::RequestResource(aDepot, aResourceHandle, aPath, aArchiveHandle);
+#endif
 }
 
 bool App::ResourceLinkExtension::OnDepotResourceCheck(Red::ResourceDepot* aDepot, Red::ResourcePath aPath)
@@ -241,12 +290,98 @@ bool App::ResourceLinkExtension::OnDepotResourceCheck(Red::ResourceDepot* aDepot
         const auto& link = s_mappings.find(aPath);
         if (link != s_mappings.end())
         {
+#if defined(__APPLE__)
+            Mac::Count(s_checkHits);
+#endif
             aPath = link->second;
         }
     }
 
     return Raw::ResourceDepot::CheckResource(aDepot, aPath);
 }
+
+#if defined(__APPLE__)
+namespace
+{
+// Hashes the game loads at the menu (Codeware R13 audio diagnostics): base\sound\event\eventsmetadata.json, base\sound\... volanguagedatamap.json.
+constexpr uint64_t SelfTestPaths[] = {0xd7b908a4d0e79997ull, 0x9324cfa977b76a28ull};
+bool s_selfTestArmed = false;
+}
+
+void App::ResourceLinkExtension::ArmMacSelfTest()
+{
+    if (!Mac::DiagEnabled() || s_selfTestArmed)
+        return;
+
+    s_selfTestArmed = true;
+
+    for (const auto hash : SelfTestPaths)
+    {
+        const Red::ResourcePath path(hash);
+        {
+            std::unique_lock _(s_copiesLock);
+            s_copies.emplace(path, path);
+        }
+        {
+            std::unique_lock _(s_linksLock);
+            s_links.emplace(path, path);
+        }
+        {
+            std::unique_lock _(s_mappingsLock);
+            s_mappings.emplace(path, path);
+        }
+    }
+
+    MAC_DIAG("[selftest] R22 ResourceLink armed: %zu identity mappings (copy, link, check) on resources the game loads later\n",
+             sizeof(SelfTestPaths) / sizeof(SelfTestPaths[0]));
+}
+
+void App::ResourceLinkExtension::LogMacStats(const char* aWhere)
+{
+    size_t copies = 0;
+    size_t links = 0;
+    size_t mappings = 0;
+    {
+        std::shared_lock _(s_copiesLock);
+        copies = s_copies.size();
+    }
+    {
+        std::shared_lock _(s_linksLock);
+        links = s_links.size();
+    }
+    {
+        std::shared_lock _(s_mappingsLock);
+        mappings = s_mappings.size();
+    }
+
+    // The test mappings are identity and are removed after the t+ reading.
+    const bool disarm = s_selfTestArmed && std::strncmp(aWhere, "t+", 2) == 0;
+
+    MAC_DIAG("[selftest] R22 ResourceLink %s: %zu copies, %zu links, %zu mappings; remapped so far: loader request %u, loader by path %u, depot request %u, depot check %u\n",
+             aWhere, copies, links, mappings, s_loaderHits.load(), s_pathHits.load(), s_copyHits.load(), s_checkHits.load());
+
+    if (disarm)
+    {
+        s_selfTestArmed = false;
+        for (const auto hash : SelfTestPaths)
+        {
+            const Red::ResourcePath path(hash);
+            {
+                std::unique_lock _(s_copiesLock);
+                s_copies.erase(path);
+            }
+            {
+                std::unique_lock _(s_linksLock);
+                s_links.erase(path);
+            }
+            {
+                std::unique_lock _(s_mappingsLock);
+                s_mappings.erase(path);
+            }
+        }
+    }
+}
+#endif
 
 Core::Set<Red::ResourcePath> App::ResourceLinkExtension::GetAliases(Red::ResourcePath aPath)
 {

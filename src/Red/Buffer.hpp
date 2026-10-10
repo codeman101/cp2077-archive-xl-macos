@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Red/Common.hpp"
+
 namespace Red
 {
 struct BufferReader
@@ -10,6 +12,39 @@ struct BufferReader
     virtual void sub_18(uint64_t a1) = 0;
     virtual uint8_t GetType() = 0;
 
+#if defined(__APPLE__)
+    // Mac (R22, /tmp/axl-d-signatures.md 2.8): the new reader (one owning pointer) comes back through x8 and the out argument is gone.
+    inline static void Clone(void*& aDst, void* aSrc)
+    {
+        using MakeResult = Red::SretValue<8>;
+
+        constexpr auto MakeBufferReaderType0 = Core::RawFunc<
+            /* addr = */ Red::AddressLib::BufferReader_MakeType0,
+            /* type = */ MakeResult (*)(uintptr_t aPayload)>();
+
+        constexpr auto MakeBufferReaderType1 = Core::RawFunc<
+            /* addr = */ Red::AddressLib::BufferReader_MakeType1,
+            /* type = */ MakeResult (*)(uintptr_t aPayload)>();
+
+        const auto payload = reinterpret_cast<uintptr_t>(aSrc) + 8;
+
+        switch (reinterpret_cast<BufferReader*>(aSrc)->GetType())
+        {
+        case 0:
+        {
+            const auto result = MakeBufferReaderType0(payload);
+            std::memcpy(&aDst, result.data, sizeof(void*));
+            break;
+        }
+        case 1:
+        {
+            const auto result = MakeBufferReaderType1(payload);
+            std::memcpy(&aDst, result.data, sizeof(void*));
+            break;
+        }
+        }
+    }
+#else
     inline static void Clone(void*& aDst, void* aSrc)
     {
         constexpr auto MakeBufferReaderType0 = Core::RawFunc<
@@ -34,6 +69,7 @@ struct BufferReader
         }
         }
     }
+#endif
 };
 }
 

@@ -72,6 +72,22 @@ constexpr uint32_t CMesh_FindAppearance = 3007126651;
 constexpr uint32_t CMesh_LoadMaterialsAsync = 701648326;
 constexpr uint32_t CMesh_AddStubAppearance = 555290091;
 constexpr uint32_t CMesh_ShouldPreloadAppearances = 503977943;
+#if defined(__APPLE__)
+// macOS only (R22): CMesh::PostLoad inlines the ShouldPreloadAppearances test, so the preload action behind it is hooked as well
+// (Windows 0xAF3CC4, Mac 0xE17504, single caller).
+constexpr uint32_t CMesh_PreloadAppearances = 3235778563; // 0xC0DE1003
+#endif
+#if defined(__APPLE__)
+// macOS only (R22). The Mac ChangeItem / ChangeCustomItem rows at state level are dead code; the game calls the aggregator level wrappers, which
+// call FindState themselves (Windows twins 0xB57FD8 / 0xB56A1C at state level). The record based visual tags entry is the twin of the Windows
+// wrapper 0x3F12F0, which does not tail jump into GetVisualTags on the Mac.
+constexpr uint32_t GarmentAssembler_ChangeItem = 3235778564;                          // 0xC0DE1004
+constexpr uint32_t GarmentAssembler_ChangeCustomItem = 3235778565;                    // 0xC0DE1005
+constexpr uint32_t AppearanceNameVisualTagsPreset_GetVisualTagsByRecord = 3235778566; // 0xC0DE1006
+// macOS only (R22). Windows 0x25050CC; the Windows IsAffectedSlot check is inlined into OnItemEquipped / OnItemUnequipped on the Mac, so the
+// extra slots are handled by hooks on those two functions and this call.
+constexpr uint32_t TPPRepresentationComponent_UnregisterAffectedItem = 3235778567; // 0xC0DE1007
+#endif
 
 constexpr uint32_t MeshMaterialBuffer_LoadMaterialAsync = 1609519068;
 
@@ -145,6 +161,12 @@ constexpr uint32_t Localization_LoadLipsyncs = 1488657506;
 constexpr uint32_t MappinSystem_GetMappinData = 3299551353;
 constexpr uint32_t MappinSystem_GetPoiData = 620961393;
 constexpr uint32_t MappinSystem_OnStreamingWorldLoaded = 140387944;
+#if defined(__APPLE__)
+// macOS only (R22). The Mac getters above are 16 byte wrappers (load the resource, branch to a finder); the finders behind them are the
+// hook targets, because the position lookup inlines one of them. Ids in the 0xC0DE range are Mac-only (no Windows twin).
+constexpr uint32_t MappinSystem_FindMappinData = 3235778561; // 0xC0DE1001
+constexpr uint32_t MappinSystem_FindPoiData = 3235778562;    // 0xC0DE1002
+#endif
 
 constexpr uint32_t MeshAppearance_LoadMaterialSetupAsync = 1419388740;
 
@@ -166,6 +188,10 @@ constexpr uint32_t ResourceDepot_RequestResource = 2450934495;
 constexpr uint32_t ResourceDepot_CheckResource = 43194193;
 
 constexpr uint32_t ResourceLoader_RequestResource = 2365013187; // res::ResourceLoader::IssueLoadingRequest
+#if defined(__APPLE__)
+// macOS only (R22). The Mac ByPath entry (Windows 0x2253C8) inlines IssueLoadingRequest, so a link redirect needs a hook on it as well.
+constexpr uint32_t ResourceLoader_IssueLoadingRequestByPath = 1250309504;
+#endif
 constexpr uint32_t ResourceLoader_OnUpdate = 1303056161;
 
 constexpr uint32_t ResourcePath_Create = 3998356057;

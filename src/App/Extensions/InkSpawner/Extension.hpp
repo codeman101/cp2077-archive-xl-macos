@@ -13,6 +13,26 @@ public:
     bool Unload() override;
 
 private:
+#if defined(__APPLE__)
+    // Mac: the Handle is the result (x8) and the async functions carry one more bool (see Red/InkSpawner.hpp).
+    static Red::Handle<Red::ink::WidgetLibraryItemInstance> OnSpawnLocal(Red::ink::WidgetLibraryResource& aLibrary,
+                                                                         Red::CName aItemName);
+
+    static Red::Handle<Red::ink::WidgetLibraryItemInstance> OnSpawnExternal(Red::ink::WidgetLibraryResource& aLibrary,
+                                                                            Red::ResourcePath aExternalPath,
+                                                                            Red::CName aItemName);
+
+    static bool OnAsyncSpawnLocal(Red::ink::WidgetLibraryResource& aLibrary,
+                                  Red::InkSpawningInfo& aSpawningInfo,
+                                  Red::CName aItemName,
+                                  bool aFlag);
+
+    static bool OnAsyncSpawnExternal(Red::ink::WidgetLibraryResource& aLibrary,
+                                     Red::InkSpawningInfo& aSpawningInfo,
+                                     Red::ResourcePath aExternalPath,
+                                     Red::CName aItemName,
+                                     bool aFlag);
+#else
     static uintptr_t OnSpawnLocal(Red::ink::WidgetLibraryResource& aLibrary,
                                   Red::Handle<Red::ink::WidgetLibraryItemInstance>& aInstance,
                                   Red::CName aItemName);
@@ -30,6 +50,7 @@ private:
                                      Red::InkSpawningInfo& aSpawningInfo,
                                      Red::ResourcePath aExternalPath,
                                      Red::CName aItemName);
+#endif
 
     static void OnFinishAsyncSpawn(Red::InkSpawningContext& aContext,
                                    Red::Handle<Red::ink::WidgetLibraryItemInstance>& aInstance);

@@ -340,7 +340,12 @@ bool App::ComponentWrapper::LoadAppearance() const
         auto meshApp = Raw::CMesh::GetAppearance(meshRef.token->resource, meshAppName);
         if (meshApp && meshApp->name == meshAppName)
         {
+#if defined(__APPLE__)
+            // Mac: the handle comes back in x8 and the appearance is passed by pointer; the handle is assigned after the call.
+            meshApp = Raw::MeshAppearance::LoadMaterialSetupAsync(meshApp.GetPtr(), 0);
+#else
             Raw::MeshAppearance::LoadMaterialSetupAsync(*meshApp.GetPtr(), meshApp, 0);
+#endif
         }
     }
 

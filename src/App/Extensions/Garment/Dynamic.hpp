@@ -116,6 +116,16 @@ public:
 
     static bool IsMale(Red::Entity* aEntity);
 
+#if defined(__APPLE__)
+    // macOS (R22): AppearanceChanger::GetSuffixValue is inlined into GetSuffixes, so a single suffix cannot be evaluated by a direct call. The three
+    // PuppetState suffixes are computed by the PuppetState extension itself (the same code the scripted records call), and every other suffix is
+    // evaluated by the game's own GetSuffixes on a probe record of the Item type whose appearanceSuffixes holds only that suffix.
+    // The probes are TweakDB records created when the TweakDB is ready.
+    static void CreateSuffixProbes();
+    static std::string GetSuffixValue(Red::Handle<Red::GameObject>& aOwner, Red::TweakDBID aEquippedItemID, Red::TweakDBID aSuffixID);
+    static void LogMacStats(const char* aWhere);
+#endif
+
     [[nodiscard]] bool IsDynamicValue(const char* aValue) const;
     [[nodiscard]] bool IsDynamicValue(const std::string& aValue) const;
     [[nodiscard]] bool IsDynamicValue(const std::string_view& aValue) const;

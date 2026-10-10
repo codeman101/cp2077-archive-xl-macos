@@ -169,6 +169,20 @@ using NodeHashMap = Core::OffsetPtr<0x78, Red::HashMap<Red::QuestNodePathHash, R
 using QuestList = Core::OffsetPtr<0xA8, Red::DynArray<Red::ResourcePath>>;
 using FactManager = Core::OffsetPtr<0xF8, Red::FactManager*>;
 
+#if defined(__APPLE__)
+// Mac (R22, HIGH): a virtual that returns true (Windows 0x495FD0 sets al to 1 as well); declared bool so that a HookBefore detour returns
+// a defined value to the caller. The callback keeps returning void.
+constexpr auto OnGameRestored = Core::RawFunc<
+    /* addr = */ Red::AddressLib::QuestsSystem_OnGameRestored,
+    /* type = */ bool (*)(Red::QuestsSystem* aSystem)>();
+
+// Mac slot 0x248 (0x2EFB134), body twin of Windows 0x12198F8.
+constexpr auto ForceStartNode = Core::RawVFunc<
+    /* addr = */ 0x240,
+    /* type = */ void (Red::questIQuestsSystem::*)(const Red::QuestNodeKey& aNodeKey,
+                                                   const Red::DynArray<Red::CName>& aInputSockets),
+    /* verified on Mac = */ true>();
+#else
 constexpr auto OnGameRestored = Core::RawFunc<
     /* addr = */ Red::AddressLib::QuestsSystem_OnGameRestored,
     /* type = */ void (*)(Red::QuestsSystem* aSystem)>();
@@ -177,6 +191,7 @@ constexpr auto ForceStartNode = Core::RawVFunc<
     /* addr = */ 0x240,
     /* type = */ void (Red::questIQuestsSystem::*)(const Red::QuestNodeKey& aNodeKey,
                                                    const Red::DynArray<Red::CName>& aInputSockets)>();
+#endif
 }
 
 namespace Raw::QuestRootInstance
