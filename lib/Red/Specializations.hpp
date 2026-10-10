@@ -16,7 +16,13 @@ struct std::hash<RED4ext::TweakDBID>
 {
     std::size_t operator()(RED4ext::TweakDBID aKey) const
     {
+#if defined(__APPLE__)
+        // R26. operator== compares the hash and the length only, because the bytes 5 to 7 of a TweakDBID that comes out of game memory can hold the
+        // offset that the game caches there. The hash has to ignore them as well, or two ids that are equal land in different buckets.
+        return static_cast<std::size_t>(aKey.value & 0xFFFFFFFFFFull);
+#else
         return aKey.value;
+#endif
     }
 };
 
@@ -39,11 +45,11 @@ struct std::hash<RED4ext::NodeRef>
 };
 
 template<typename T>
-requires std::is_class_v<T> && std::is_convertible_v<T, size_t> && Red::Detail::HasGeneratedTypeName<T>
+requires std::is_class_v<T> && std::is_convertible_v<T, uint64_t> && Red::Detail::HasGeneratedTypeName<T>
 struct std::hash<T>
 {
     std::size_t operator()(T aKey) const
     {
-        return static_cast<size_t>(aKey);
+        return static_cast<uint64_t>(aKey);
     }
 };

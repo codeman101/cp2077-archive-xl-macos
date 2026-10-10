@@ -1,5 +1,11 @@
 #pragma once
 
+#if defined(__APPLE__)
+#include <dlfcn.h>
+#include <cstdio>
+#include <cstdlib>
+#endif
+
 namespace Red
 {
 class TypeInfoRegistrar
@@ -17,6 +23,24 @@ public:
     {
         QueuePendingRegisterCallbacks();
         QueuePendingDescribeCallbacks();
+    }
+
+    // Run the queued RedLib callbacks on this thread. macOS calls this from
+    // codeware_registerNatives and again from codeware_postLoadScripts.
+    static inline void RunPending()
+    {
+        ProcessPendingRegisterCallbacks();
+        ProcessPendingDescriberCallbacks();
+    }
+
+    static inline std::size_t PendingRegisterCount()
+    {
+        return s_registerCallbacks.size();
+    }
+
+    static inline std::size_t PendingDescribeCount()
+    {
+        return s_describeCallbacks.size();
     }
 
     static inline void AddRegisterCallback(Callback aRegister)
@@ -52,11 +76,28 @@ private:
         }
     }
 
+#if defined(__APPLE__)
+    // macOS (R22): with CODEWARE_MAC_DIAG=1 every callback is named before it runs, so a fault inside a registration is located.
+    static inline void TraceCallback(const char* aKind, Callback aCallback)
+    {
+        const char* diag = std::getenv("CODEWARE_MAC_DIAG");
+        if (!diag || diag[0] != '1')
+            return;
+        Dl_info info{};
+        const char* sym = (dladdr(reinterpret_cast<const void*>(aCallback), &info) && info.dli_sname) ? info.dli_sname : "?";
+        std::fprintf(stderr, "[redlib] %s callback %s\n", aKind, sym);
+        std::fflush(stderr);
+    }
+#else
+    static inline void TraceCallback(const char*, Callback) {}
+#endif
+
     static inline void ProcessPendingRegisterCallbacks()
     {
         auto callbacks = std::move(s_registerCallbacks);
         for (const auto& callback :callbacks)
         {
+            TraceCallback("register", callback);
             callback();
         }
     }
@@ -66,6 +107,7 @@ private:
         auto callbacks = std::move(s_describeCallbacks);
         for (const auto& callback :callbacks)
         {
+            TraceCallback("describe", callback);
             callback();
         }
     }
