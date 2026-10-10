@@ -79,7 +79,11 @@ private:
                                              const Red::WeakPtr<Red::EntityBuilder>& aBuilderWeak);
     static void OnPartPackageExtract(Red::DynArray<Red::Handle<Red::ISerializable>>& aResultObjects,
                                      const Red::SharedPtr<Red::ResourceToken<Red::EntityTemplate>>& aPartToken);
+#ifdef __APPLE__
+    static void OnGarmentPackageExtract(Red::GarmentExtractionParamsMac* aParams, const Red::JobGroup& aJobGroup);
+#else
     static void OnGarmentPackageExtract(Red::GarmentExtractionParams* aParams, const Red::JobGroup& aJobGroup);
+#endif
     static void OnStreamingWorldLoad(Red::worldStreamingWorld* aWorld);
     static void OnCurveSetResourceLoad(Red::CurveSet* aResource);
     static void OnDeviceResourceLoad(Red::gameDeviceResource* aResource);

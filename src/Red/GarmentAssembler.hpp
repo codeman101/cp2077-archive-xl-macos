@@ -95,6 +95,22 @@ struct GarmentExtractionParams
     Handle<entEntityTemplate> partTemplate;      // 00
     SharedPtr<GarmentProcessingContext> context; // 10
 };
+
+#ifdef __APPLE__
+// macOS: the stage-2 garment extraction job (0xAE6660, 'ExtractGarmentComponent', the twin of the Windows job at this
+// hash) takes a 0x30-byte block from the Jobs2Data pool: the same two members plus 16 bytes of flags that stage 1
+// (0xAE6348, 'ProcessLoadedAppearanceParts') copies from its own 0x40-byte closure (bytes 0x30 to 0x3D). The job
+// releases the members and frees the block itself before it returns, so it can be called again only with a fresh
+// block from the same pool. Stage 1 also frees its own closure when it returns.
+struct GarmentExtractionParamsMac
+{
+    Handle<entEntityTemplate> partTemplate; // 00
+    GarmentProcessingContext* context;      // 10 (the SharedPtr<GarmentProcessingContext> instance)
+    RefCnt* contextRefs;                    // 18 (and its control block)
+    uint8_t flags[0x10];                    // 20
+};
+static_assert(sizeof(GarmentExtractionParamsMac) == 0x30);
+#endif
 }
 
 namespace Raw::GarmentAssembler
@@ -148,9 +164,15 @@ constexpr auto ProcessGarment = Core::RawFunc<
                                Red::GarmentLoadingParams* aParams)>();
 #endif
 
+#ifdef __APPLE__
+constexpr auto ExtractComponentsJob = Core::RawFunc<
+    /* addr = */ Red::AddressLib::GarmentAssembler_ExtractComponentsJob,
+    /* type = */ void (*)(Red::GarmentExtractionParamsMac* aParams, const Red::JobGroup& aJobGroup)>();
+#else
 constexpr auto ExtractComponentsJob = Core::RawFunc<
     /* addr = */ Red::AddressLib::GarmentAssembler_ExtractComponentsJob,
     /* type = */ void (*)(Red::GarmentExtractionParams* aParams, const Red::JobGroup& aJobGroup)>();
+#endif
 
 using ProcessMesh = void (*)(Red::GarmentProcessingContext* aProcessor,
                              uint32_t aIndex,

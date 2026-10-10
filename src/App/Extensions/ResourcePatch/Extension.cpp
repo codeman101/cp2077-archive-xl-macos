@@ -59,7 +59,9 @@ bool App::ResourcePatchExtension::Load()
     Hook<Raw::MorphTargetMesh::PostLoad>(&OnMorphTargetResourceLoad).OrThrow();
     HookBefore<Raw::EntityBuilder::ScheduleExtractComponentsJob>(&OnEntityPackageLoad).OrThrow();
     HookAfter<Raw::AppearanceDefinition::ExtractPartComponents>(&OnPartPackageExtract).OrThrow();
+#ifndef __APPLE__
     HookAfter<Raw::GarmentAssembler::ExtractComponentsJob>(&OnGarmentPackageExtract).OrThrow();
+#endif
     HookAfter<Raw::PersistencySystem::SetPersistentStateData>(&OnSetPersistentStateData).OrThrow();
 
     s_resourcePathRegistry = Core::Resolve<ResourcePathRegistry>();
@@ -82,6 +84,9 @@ bool App::ResourcePatchExtension::Unload()
     Unhook<Raw::MorphTargetMesh::PostLoad>();
     Unhook<Raw::EntityBuilder::ScheduleExtractComponentsJob>();
     Unhook<Raw::AppearanceDefinition::ExtractPartComponents>();
+#ifdef __APPLE__
+    if (IsHooked<Raw::GarmentAssembler::ExtractComponentsJob>())
+#endif
     Unhook<Raw::GarmentAssembler::ExtractComponentsJob>();
     Unhook<Raw::PersistencySystem::SetPersistentStateData>();
 
@@ -170,6 +175,29 @@ void App::ResourcePatchExtension::Configure()
     {
         s_resourcePathRegistry->RegisterPath(knownPath, knownPathStr);
     }
+
+#ifdef __APPLE__
+    // The garment extraction job runs for every dressed puppet and frees its own block, so the full hook is installed only
+    // when a loaded patch can use it: a patch resource that is an entity template (.ent) and modifies its components.
+    if (!IsHooked<Raw::GarmentAssembler::ExtractComponentsJob>())
+    {
+        const auto needed = std::ranges::any_of(s_patches, [&knownPaths](const auto& aEntry) {
+            const auto pathIt = knownPaths.find(aEntry.first);
+            if (pathIt == knownPaths.end())
+                return false;
+            const auto& pathStr = pathIt->second;
+            return pathStr.size() >= 4 && strcasecmp(pathStr.c_str() + pathStr.size() - 4, ".ent") == 0 &&
+                   std::ranges::any_of(aEntry.second, [](const PatchInstancePtr& aInstance) {
+                       return aInstance->Modifies(EntityTemplateComponentsProp);
+                   });
+        });
+
+        if (needed)
+        {
+            Hook<Raw::GarmentAssembler::ExtractComponentsJob>(&OnGarmentPackageExtract).OrThrow();
+        }
+    }
+#endif
 
     m_configs.clear();
 }
@@ -851,42 +879,52 @@ void App::ResourcePatchExtension::OnPartPackageExtract(
 }
 
 #ifdef __APPLE__
-void App::ResourcePatchExtension::OnGarmentPackageExtract(Red::GarmentExtractionParams* aParams,
+void App::ResourcePatchExtension::OnGarmentPackageExtract(Red::GarmentExtractionParamsMac* aParams,
                                                           const Red::JobGroup& aJobGroup)
 {
-    // macOS: params+0 is a SharedPtr<ResourceToken<EntityTemplate>> (the job reads only its instance), not a Handle,
-    // so it is never overwritten. The job consumes its params synchronously (token, +0x20 SharedPtr with a new ref,
-    // +0x30..+0x3D by value; job 0x100AE6348), so each patch runs on a copy whose +0 is the patch token instead.
-    constexpr size_t ParamsSize = 0x40;
+    // A full hook, installed by Configure only when a loaded .ent patch modifies components. The job (stage 2, 0xAE6660)
+    // releases the members of its block and frees the block before it returns, so what the patches need is copied out
+    // first, and each extra extraction runs on a fresh block from the pool the game takes it from (Jobs2Data). The
+    // processing context is kept as its raw pointer pair with a reference of our own.
+    const Red::Handle<Red::EntityTemplate> originalTemplate = aParams->partTemplate;
+    auto* const context = aParams->context;
+    auto* const contextRefs = aParams->contextRefs;
+    uint8_t flags[sizeof(aParams->flags)];
+    std::memcpy(flags, aParams->flags, sizeof(flags));
 
-    auto* partToken = *reinterpret_cast<Red::ResourceToken<Red::EntityTemplate>**>(aParams);
-    if (!partToken)
-        return;
+    if (contextRefs)
+        contextRefs->IncRef();
 
-    const auto& patchList = GetPatchList(partToken->path);
+    Raw::GarmentAssembler::ExtractComponentsJob(aParams, aJobGroup);
 
-    if (patchList.empty())
-        return;
-
-    for (const auto& patchInstance : patchList)
+    if (originalTemplate)
     {
-        if (!patchInstance->GetResource<Red::EntityTemplate>())
-            continue;
-
-        if (patchInstance->Modifies(EntityTemplateComponentsProp))
+        for (const auto& patchInstance : GetPatchList(originalTemplate->path))
         {
-            auto patchToken = patchInstance->GetToken<Red::EntityTemplate>();
-            if (!patchToken)
+            auto patchResource = patchInstance->GetResource<Red::EntityTemplate>();
+
+            if (!patchResource || !patchInstance->Modifies(EntityTemplateComponentsProp))
                 continue;
 
-            alignas(16) uint8_t paramsCopy[ParamsSize];
-            std::memcpy(paramsCopy, aParams, ParamsSize);
-            *reinterpret_cast<void**>(paramsCopy) = patchToken.instance;
+            const auto allocation =
+                Red::Memory::Allocator<Red::Memory::PoolJobs2Data>::Get()->Alloc(sizeof(Red::GarmentExtractionParamsMac));
+            if (!allocation.memory)
+                continue;
 
-            Raw::GarmentAssembler::ExtractComponentsJob(reinterpret_cast<Red::GarmentExtractionParams*>(paramsCopy),
-                                                        aJobGroup);
+            auto* block = new (allocation.memory) Red::GarmentExtractionParamsMac{patchResource, context, contextRefs, {}};
+            std::memcpy(block->flags, flags, sizeof(flags));
+
+            if (contextRefs)
+                contextRefs->IncRef(); // the block's own reference, released by the job
+
+            Raw::GarmentAssembler::ExtractComponentsJob(block, aJobGroup);
         }
     }
+
+    // Our own reference. If every other holder is gone by now this was the last one, and the object is left to the
+    // game's own cleanup rather than destroyed here.
+    if (contextRefs)
+        (void)contextRefs->DecRef();
 }
 #else
 void App::ResourcePatchExtension::OnGarmentPackageExtract(Red::GarmentExtractionParams* aParams,
