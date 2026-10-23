@@ -106,7 +106,7 @@ const std::unordered_map<uint32_t, uintptr_t>& AxlRows()
         {3550098299u, 0x1C2B6DC}, // Localization_LoadOnScreens. Windows 0x261018. fork DB, verified there.
         {772484645u, 0x1C2B4C8}, // Localization_LoadSubtitles. Windows 0x262090. fork DB, verified there.
         {4223669659u, 0x3fe6c94}, // Localization_LoadVoiceOvers. Windows 0x263124. fork DB, verified there.
-        {240386859u, 0x31E18}, // Main. Windows 0x18d4dc0. Codeware/SDK row.
+        {240386859u, 0x323A0}, // Main. Windows 0x18d4dc0. Codeware/SDK row.
         {3299551353u, 0x30F7C40}, // MappinSystem_GetMappinData. Windows 0x9067a0 (reads this+0x68). R22: the fork DB row 0x42A3E38 is the crossed twin; the Mac wrapper that reads this+0x68 is 0x42A3E68. Not hooked (16 byte wrapper), see FindPoiData.
         // 2.5: MappinSystem_GetPoiData (620961393) has no standalone function any more (the 4-instruction wrapper was merged into
         // 0x30F7934); it is not hooked on Mac, so the row is dropped and the hash resolves to its trap stub.
