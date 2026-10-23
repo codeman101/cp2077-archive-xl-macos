@@ -212,7 +212,7 @@ static void ByRecordFlatSelfTest()
         return;
 
     using VersionAccessor = uint8_t (*)();
-    const auto gameVersion = reinterpret_cast<VersionAccessor>(Red::MacGameBase() + 0x2B743C0)();
+    const auto gameVersion = reinterpret_cast<VersionAccessor>(Red::MacGameBase() + 0x37CCFF4)();
     const bool versionOK = gameVersion == tweakDB->unk160;
     const bool bufferOK = tweakDB->staticFlatDataBuffer != 0 && tweakDB->staticFlatDataBuffer == tweakDB->flatDataBuffer;
 

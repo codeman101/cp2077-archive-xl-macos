@@ -1637,4 +1637,4 @@ static_assert(__builtin_offsetof(RED4ext::localization::PersistenceOnScreenEntry
 static_assert(__builtin_offsetof(RED4ext::localization::PersistenceSubtitleMap, entries) == 0x30, "RED4ext::localization::PersistenceSubtitleMap::entries");
 static_assert(__builtin_offsetof(RED4ext::localization::PersistenceSubtitleMapEntry, subtitleGroup) == 0x0, "RED4ext::localization::PersistenceSubtitleMapEntry::subtitleGroup");
 static_assert(__builtin_offsetof(RED4ext::localization::PersistenceSubtitleMapEntry, subtitleFile) == 0x8, "RED4ext::localization::PersistenceSubtitleMapEntry::subtitleFile");
-static_assert(__builtin_offsetof(RED4ext::ent::SkinnedMeshComponent, meshHandle) == 0x1F8, "RED4ext::ent::SkinnedMeshComponent::meshHandle: Windows 0x1B3B5C reads [this+0x200], Mac twin 0xC7D688 reads [this+0x1F8]");
+static_assert(__builtin_offsetof(RED4ext::ent::SkinnedMeshComponent, meshHandle) == 0x1F8, "RED4ext::ent::SkinnedMeshComponent::meshHandle: Windows 0x73FCDC reads [this+0x200], Mac twin 0xC7D688 reads [this+0x1F8]");
