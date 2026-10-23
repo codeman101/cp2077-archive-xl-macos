@@ -136,7 +136,7 @@ void App::ArchiveService::OnInitializeArchives(Red::ResourceDepot* aDepot)
 #if defined(__APPLE__)
             Raw::ResourceDepot::LoadArchives(nullptr, group, archivePaths, loadedResources, false, Raw::ResourceDepot::LoadArchivesMode);
 #else
-            Raw::ResourceDepot::LoadArchives(nullptr, group, archivePaths, loadedResources, false);
+            Raw::ResourceDepot::LoadArchives(nullptr, group, archivePaths, loadedResources, 0, 0);
 #endif
         }
     }
@@ -155,7 +155,7 @@ void App::ArchiveService::OnInitializeArchives(Red::ResourceDepot* aDepot)
 #if defined(__APPLE__)
         Raw::ResourceDepot::LoadArchives(nullptr, group, archivePaths, loadedResources, false, Raw::ResourceDepot::LoadArchivesMode);
 #else
-        Raw::ResourceDepot::LoadArchives(nullptr, group, archivePaths, loadedResources, false);
+        Raw::ResourceDepot::LoadArchives(nullptr, group, archivePaths, loadedResources, 0, 0);
 #endif
     }
 

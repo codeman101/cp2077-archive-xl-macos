@@ -42,6 +42,7 @@ const std::unordered_map<uint32_t, uintptr_t>& AxlRows()
         {3007126651u, 0x519C4B0}, // CMesh_FindAppearance. Windows 0x3ca158. fork DB, verified there.
         {773462733u, 0x519E118}, // CMesh_GetAppearance. Windows 0x3ca128. fork DB, verified there.
         {701648326u, 0x519C6DC}, // CMesh_LoadMaterialsAsync. Windows 0x253c5c. fork DB, verified there.
+        {479081020u, 0x519C6DC}, // CMesh_LoadMaterialsAsync: the 2.5 hash of the same function (psiberx/cp2077-archive-xl#31 re-derived it on Windows; this row is the 2.5 Mac address of the old row)
         {2272530537u, 0x519A58C}, // CMesh_PostLoad. Windows 0x224844. fork DB, verified there.
         {503977943u, 0x519ADA4}, // CMesh_ShouldPreloadAppearances. Windows 0x22583c. fork DB, verified there.
         {3015323410u, 0x4BB13FC}, // CharacterCustomizationFeetController_CheckState. Windows 0x388134. fork DB, verified there.
@@ -56,6 +57,7 @@ const std::unordered_map<uint32_t, uintptr_t>& AxlRows()
         {3766105236u, 0x4BBF438}, // CharacterCustomizationState_GetHeadAppearances2. Windows 0x38503c. fork DB, verified there.
         {4275058446u, 0x4bc7b24}, // CharacterCustomizationSystem_GetResource. Windows 0xeed744. fork DB, verified there.
         {2341291776u, 0x4BC779C}, // CharacterCustomizationSystem_Initialize. Windows 0x27f8a0c. fork DB, verified there.
+        {2343126786u, 0x4BC779C}, // CharacterCustomizationSystem_Initialize: the 2.5 hash of the same function (psiberx/cp2077-archive-xl#31 re-derived it on Windows; this row is the 2.5 Mac address of the old row)
         {1092645213u, 0x4BD3F5C}, // CharacterCustomizationSystem_InitializeAppOption. Windows 0x27f5010. fork DB, verified there.
         {3776734053u, 0x4BD448C}, // CharacterCustomizationSystem_InitializeMorphOption. Windows 0x27f5400. fork DB, verified there.
         {2347184335u, 0x4bae524}, // CharacterCustomizationGenitalsController_CheckState. Windows 0x8586b4. R22: body twin read from both sides (virtual 0x2A0 / Mac 0x2A8 first, then the owner's component at +0x50 -> +0xC0, the vtable +0x430 / Mac +0x438 query, the 0x90 byte element loop, the controller flag at +0xD0 / Mac +0xC8) and the Mac state refresh virtual 0x2440754 calls it as the Windows 0x3861dc calls 0x8586b4. The fork DB entry 0x2deac58 was unverified.
@@ -75,6 +77,7 @@ const std::unordered_map<uint32_t, uintptr_t>& AxlRows()
         {2296260874u, 0x19A8040}, // Entity_RequestComponents. Windows 0x8b116c. Codeware/SDK row.
         {3596356635u, 0x19AB2D4}, // Entity_Uninitialize. Windows 0x402f74. Codeware/SDK row.
         {1886854234u, 0x19D50C8}, // FactoryIndex_LoadFactoryAsync. Windows 0x94d51c. fork DB, verified there.
+        {1931943018u, 0x19D50C8}, // FactoryIndex_LoadFactoryAsync: the 2.5 hash of the same function (psiberx/cp2077-archive-xl#31 re-derived it on Windows; this row is the 2.5 Mac address of the old row)
         {3040549301u, 0x19D551C}, // FactoryIndex_ResolveResource. Windows 0x2046bf4. fork DB, verified there.
         {2923109755u, 0x442d290}, // GameApplication_InitResourceDepot. Windows 0x9f45c8. fork DB, verified there.
         {3128897273u, 0x2007EBC}, // GarmentAssemblerState_AddCustomItem. Windows 0xb56ac0. fork DB, verified there.
@@ -90,8 +93,11 @@ const std::unordered_map<uint32_t, uintptr_t>& AxlRows()
         {1863723270u, 0x2008310}, // GarmentAssembler_RemoveItem. Windows 0xb575bc. fork DB, verified there.
         {1828854026u, 0x19545C8}, // IPlacedComponent_SetTransform. Windows 0x574fc8. Codeware/SDK row.
         {2698985195u, 0x4368F34}, // InkSpawner_FinishAsyncSpawn. Windows 0xfa63f0. fork DB, verified there.
+        {4097515464u, 0x4368F34}, // InkSpawner_FinishAsyncSpawn: the 2.5 hash of the same function (psiberx/cp2077-archive-xl#31 re-derived it on Windows; this row is the 2.5 Mac address of the old row)
         {1396063719u, 0x4353D74}, // InkWidgetLibrary_AsyncSpawnFromExternal. Windows 0x9fb2a8. fork DB, verified there.
+        {225197914u, 0x4353D74}, // InkWidgetLibrary_AsyncSpawnFromExternal: the 2.5 hash of the same function (psiberx/cp2077-archive-xl#31 re-derived it on Windows; this row is the 2.5 Mac address of the old row)
         {118698863u, 0x4353a7c}, // InkWidgetLibrary_AsyncSpawnFromLocal. Windows 0x57f26c. fork DB, verified there.
+        {2342073570u, 0x4353a7c}, // InkWidgetLibrary_AsyncSpawnFromLocal: the 2.5 hash of the same function (psiberx/cp2077-archive-xl#31 re-derived it on Windows; this row is the 2.5 Mac address of the old row)
         {506278179u, 0x435424C}, // InkWidgetLibrary_SpawnFromExternal. Windows 0x9fb618. fork DB, verified there.
         {1158555307u, 0x435413C}, // InkWidgetLibrary_SpawnFromLocal. Windows 0x57f9c0. fork DB, verified there.
         {3392610574u, 0x200CD00}, // ItemFactoryAppearanceChangeRequest_LoadAppearance. Windows 0x12e1a38. fork DB, verified there.
@@ -130,13 +136,16 @@ const std::unordered_map<uint32_t, uintptr_t>& AxlRows()
         {2048921710u, 0x2A0B26C}, // QuestsSystem_OnGameRestored. Windows 0x495fd0. fork DB, verified there.
         {43194193u, 0x151AA2C}, // ResourceDepot_CheckResource. Windows 0x26475c. fork DB, verified there.
         {2885423437u, 0x151A118}, // ResourceDepot_InitializeArchives. Windows 0xe60e24. fork DB, verified there.
+        {2892763485u, 0x151A118}, // ResourceDepot_InitializeArchives: the 2.5 hash of the same function (psiberx/cp2077-archive-xl#31 re-derived it on Windows; this row is the 2.5 Mac address of the old row)
         {2517385486u, 0x151B18C}, // ResourceDepot_LoadArchives. Windows 0x7bba48. fork DB, verified there.
+        {3573367139u, 0x151B18C}, // ResourceDepot_LoadArchives: the 2.5 hash of the same function (psiberx/cp2077-archive-xl#31 re-derived it on Windows; this row is the 2.5 Mac address of the old row)
         {2450934495u, 0x151A748}, // ResourceDepot_RequestResource. Windows 0x1cfa8c. fork DB, verified there.
         {2365013187u, 0x10E710C}, // ResourceLoader_RequestResource. Windows 0x1de50c. fork DB, verified there.
         {3998356057u, 0x106C8C4}, // ResourcePath_Create. Windows 0x1df644. fork DB, verified there.
         {2901686778u, 0x120AFF4}, // ResourceSerializer_Deserialize. Windows 0x148b70. fork DB, verified there.
         {2577814646u, 0x1207588}, // ResourceSerializer_Load. Windows 0x2357e8. fork DB, verified there.
         {1185093671u, 0x12090B0}, // ResourceSerializer_OnDependenciesReady. Windows 0x24486c. fork DB, verified there.
+        {3892979844u, 0x12090B0}, // ResourceSerializer_OnDependenciesReady: the 2.5 hash of the same function (psiberx/cp2077-archive-xl#31 re-derived it on Windows; this row is the 2.5 Mac address of the old row)
         {3972601611u, 0x1c05360}, // StreamingSector_PostLoad. Windows 0x26eeb4. fork DB, verified there.
         {410718963u, 0x1C09804}, // StreamingWorld_Serialize. Windows 0x113a890. fork DB, verified there.
         {4129169021u, 0x1E9FF18}, // TPPRepresentationComponent_OnAttach. Windows 0xac58c0. fork DB, verified there.
@@ -144,6 +153,7 @@ const std::unordered_map<uint32_t, uintptr_t>& AxlRows()
         {1933319146u, 0x1EA50BC}, // TPPRepresentationComponent_OnItemUnequipped. Windows 0x9fe1dc. fork DB, verified there.
         {3037343626u, 0x1EA0738}, // TPPRepresentationComponent_RegisterAffectedItem. Windows 0x9fdce8. fork DB, verified there.
         {3602585178u, 0x37CE05C}, // TweakDB_Load. Windows 0x50eb1c. fork DB, verified there.
+        {63182599u, 0x37CE05C}, // TweakDB_Load: the 2.5 hash of the same function (psiberx/cp2077-archive-xl#31 re-derived it on Windows; this row is the 2.5 Mac address of the old row)
         // Unmapped (trap stubs):
         // AISpotPersistentDataArray_Reserve (3842971216). Windows 0x83bf1c. unmapped: stays a trap (fork DB entry 0x3040dec unverified).
         // AppearanceChanger_GetBaseMeshOffset (4219677283). Windows 0x2716f8. unmapped: stays a trap (fork DB entry 0xad043c unverified).
@@ -156,6 +166,7 @@ const std::unordered_map<uint32_t, uintptr_t>& AxlRows()
         // CharacterCustomizationSystem_InitializeOptionsFromState (1168449474). Windows 0x27f5600. unmapped: stays a trap (fork DB entry 0x453c2d4 unverified).
         // ImpostorComponent_OnAttach (4002093843). Windows 0x2570a70. unmapped: stays a trap (fork DB entry 0x37dcb7c unverified).
         {1693194103u, 0x43181C8}, // InkWorldLayer_UpdateComponents. Windows 0x29eebc. R22 code twin: no standalone function on the Mac; the lambda is inlined into the parallel-for job body 0x491DDB0 (Windows job body 0xC51EEC). The limit is `cmp x22,#9; b.hi` at +0x12C/+0x130. The row is read as code (WorldWidgetLimitPatch), never called. The fork DB entry 0x3da0574 was unverified.
+        {2254060789u, 0x43181C8}, // InkWorldLayer_UpdateComponents: the 2.5 hash of the same function (psiberx/cp2077-archive-xl#31 re-derived it on Windows; this row is the 2.5 Mac address of the old row)
         {1303056161u, 0x10E4FD0}, // ResourceLoader_OnUpdate. Windows 0x270acc. R22 code twin: void(ResourceLoader*), the loader's per-frame token cache maintenance, one caller (the tail call wrapper 0x21B99A8, called once per frame from 0x3D99938 like Windows 0x29329C from 0x291DF0). The fork DB entry 0x2d9766c was unverified.
         // ResourceSerializer_OnResourceReady (1147149338). Windows 0x235784. unmapped: stays a trap (fork DB entry 0x20ab510 unverified).
         // ResourceSerializer_PostLoad (1350901460). Windows 0x243138. unmapped: stays a trap (fork DB entry 0x21ac670 unverified).
