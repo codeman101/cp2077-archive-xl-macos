@@ -24,6 +24,9 @@ protected:
 
     void OnInitializeArchives(Red::ResourceDepot* aDepot);
     static Red::ArchiveGroup& ResolveArchiveGroup(Red::ResourceDepot* aDepot, const Red::CString& aBasePath);
+#if defined(__APPLE__)
+    static bool IsMountedByGame(Red::ResourceDepot* aDepot, const std::filesystem::path& aDir);
+#endif
 
 #if defined(__APPLE__)
     // macOS (R22): archive file names that are not mounted (mac-mount-skip.txt next to the plugin, one name per line).

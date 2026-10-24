@@ -14,6 +14,7 @@ App::ArchiveService::ArchiveService(std::filesystem::path aGameDir, std::filesys
     LoadSkipList();
 
     // macOS (R22). The Mac game mounts archive/Mac/{content,ep1,patch} only, not archive/Mac/mod (Windows mounts archive/pc/mod natively).
+    // Game 2.5 mounts archive/mac/mod itself; OnInitializeArchives then leaves the folder to the game (IsMountedByGame).
     // The loose mod archives are mounted here, as a Mod-scope group, which also lets the extension discovery find the .xl files
     // next to them. The bundle is registered only when it exists (the packed ArchiveXL.archive is not shipped on macOS yet).
     std::error_code ec;
@@ -69,6 +70,18 @@ void App::ArchiveService::OnInitializeArchives(Red::ResourceDepot* aDepot)
 
     for (const auto& archiveDir : m_dirs)
     {
+#if defined(__APPLE__)
+        // Game 2.5: the Mac game mounts archive/mac/mod itself (a Mod-scope group with the base ".../archive/mac/mod/"). Mounting
+        // the folder a second time loaded every archive twice, and the extension discovery, which walks the Mod-scope groups, read
+        // every .xl twice. The game mounts all of the folder, so mac-mount-skip.txt has no effect there.
+        if (archiveDir != m_bundleDir && IsMountedByGame(aDepot, archiveDir))
+        {
+            LogInfo("Archive directory \"{}\" is mounted by the game, not mounted again.",
+                    std::filesystem::relative(archiveDir, m_gameDir).string());
+            continue;
+        }
+#endif
+
         std::error_code error;
         auto dirIt = std::filesystem::directory_iterator(archiveDir, error);
 
@@ -168,6 +181,23 @@ void App::ArchiveService::OnInitializeArchives(Red::ResourceDepot* aDepot)
     Mac::DumpDepot(aDepot, "after extra archives");
 #endif
 }
+
+#if defined(__APPLE__)
+bool App::ArchiveService::IsMountedByGame(Red::ResourceDepot* aDepot, const std::filesystem::path& aDir)
+{
+    auto normalize = [](std::string aPath) {
+        while (!aPath.empty() && (aPath.back() == '/' || aPath.back() == '\\'))
+            aPath.pop_back();
+        std::transform(aPath.begin(), aPath.end(), aPath.begin(), [](unsigned char c) { return std::tolower(c); });
+        return aPath;
+    };
+
+    const auto dir = normalize(aDir.string());
+    return std::any_of(aDepot->groups.begin(), aDepot->groups.end(), [&](const Red::ArchiveGroup& aGroup) {
+        return aGroup.scope == Red::ArchiveScope::Mod && normalize(aGroup.basePath.c_str()) == dir;
+    });
+}
+#endif
 
 Red::ArchiveGroup& App::ArchiveService::ResolveArchiveGroup(Red::ResourceDepot* aDepot, const Red::CString& aBasePath)
 {
