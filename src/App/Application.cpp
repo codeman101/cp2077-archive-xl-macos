@@ -19,7 +19,7 @@
 #endif
 
 #if defined(__APPLE__)
-App::Application::Application(void* aModule, RED4ext::PluginHandle aPlugin, const RED4ext::Sdk* aSdk)
+App::Application::Application(void* aModule, RED4ext::v1::PluginHandle aPlugin, const RED4ext::v1::Sdk* aSdk)
 {
     // MAC-NOT-YET: no SpdlogProvider (log lines go to stderr with the prefix "[axl]"; the launcher captures them), no
     // RED4extProvider::RegisterScripts (the script cache is built offline by tools/build-cache.py) and no Migration::CleanUp

@@ -92,7 +92,7 @@ void App::PuppetStateExtension::OnTweakDBReady()
         }
         MAC_DIAG("[selftest] R22 PuppetState suffix records: exist=%d%d%d%d system=%s function=%s listed=%u/4 listSize=%u\n",
                  Red::RecordExists(BodyTypeSuffixID), Red::RecordExists(ArmsStateSuffixID), Red::RecordExists(LegsStateSuffixID),
-                 Red::RecordExists(FeetStateSuffixID), system.ToString(), function.ToString(), found, list ? list->size : 0u);
+                 Red::RecordExists(FeetStateSuffixID), system.ToString(), function.ToString(), found, list ? list->Size() : 0u);
     }
 #endif
 }

@@ -701,7 +701,7 @@ void App::DynamicAppearanceController::CreateSuffixProbes()
         listed += (order && order->Contains(probe.first)) ? 1 : 0;
 
     MAC_DIAG("[selftest] R22 Garment suffix probes: %zu probe record(s) created, %u of them in the suffix order list (%u entries)\n",
-             s_probeRecords.size(), listed, order ? order->size : 0u);
+             s_probeRecords.size(), listed, order ? order->Size() : 0u);
 }
 
 std::string App::DynamicAppearanceController::GetSuffixValue(Red::Handle<Red::GameObject>& aOwner, Red::TweakDBID aEquippedItemID,

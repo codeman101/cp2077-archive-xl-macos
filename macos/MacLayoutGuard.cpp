@@ -2,8 +2,8 @@
 // Every reflected member of every SDK class the plugin sees: the compiled offset must equal the game's. A wrong
 // layout fails the build, not the game. Sizes are checked for the classes the plugin derives from or instantiates.
 #include "pch.hpp"
-#include <RED4ext/Api/Sdk.hpp>
-#include <RED4ext/Api/SemVer.hpp>
+#include <RED4ext/Api/v1/Sdk.hpp>
+#include <RED4ext/Api/v1/SemVer.hpp>
 #include <RED4ext/Common.hpp>
 #include <RED4ext/Detail/Memory.hpp>
 #include <RED4ext/Hashing/FNV1a.hpp>
@@ -11,7 +11,6 @@
 #include <RED4ext/Memory/Vault.hpp>
 #include <RED4ext/RED4ext.hpp>
 #include <RED4ext/Relocation.hpp>
-#include <RED4ext/RenderProxy.hpp>
 #include <RED4ext/Rendering/RenderProxy.hpp>
 #include <RED4ext/ResourceDepot.hpp>
 #include <RED4ext/ResourceLoader.hpp>

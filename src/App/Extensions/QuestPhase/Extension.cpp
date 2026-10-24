@@ -129,7 +129,7 @@ void App::QuestPhaseExtension::OnGameRestored(Red::QuestsSystem* aSystem)
     auto& nodeHashMap = Raw::QuestsSystem::NodeHashMap::Ref(aSystem);
     const auto& questList = Raw::QuestsSystem::QuestList::Ref(aSystem);
 #if defined(__APPLE__)
-    MAC_DIAG("[selftest] R27 QuestPhase OnGameRestored: quest list %u entries, fact manager %p, node map size %u\n", questList.size,
+    MAC_DIAG("[selftest] R27 QuestPhase OnGameRestored: quest list %u entries, fact manager %p, node map size %u\n", questList.Size(),
              static_cast<void*>(factManager), nodeHashMap.size);
 #endif
 

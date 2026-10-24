@@ -132,7 +132,7 @@ void App::LocalizationExtension::OnLoadTexts(Red::Handle<TextResource>& aOnScree
 #if defined(__APPLE__)
     // R22 menu self-test (CODEWARE_MAC_DIAG=1, read-only): the game's onscreens resource after the merge.
     MAC_DIAG("[selftest] R22 Localization onscreens language=%s entries=%u merged=%d\n", language.ToString(),
-             aOnScreens ? aOnScreens->entries.size : 0u, mergedAny ? 1 : 0);
+             aOnScreens ? aOnScreens->entries.Size() : 0u, mergedAny ? 1 : 0);
 #endif
 
     if (!mergedAny)
@@ -251,8 +251,7 @@ App::TextEntry* App::LocalizationExtension::FindSameTextEntry(TextEntry& aEntry,
     if (it == end || it->primaryKey != aEntry.primaryKey)
         return nullptr;
 
-#if defined(__APPLE__)
-    // The Mac SDK port's DynArray iterators are plain pointers (RED4ext.SDK 1.0 wraps them, hence Base()).
+#if 0
     return it;
 #else
     return it.Base();
@@ -315,7 +314,7 @@ void App::LocalizationExtension::OnLoadSubtitles(Red::Handle<SubtitleResource>& 
 
 #if defined(__APPLE__)
     MAC_DIAG("[selftest] R22 Localization subtitles language=%s entries=%u merged=%d\n", language.ToString(),
-             aSubtitles ? aSubtitles->entries.size : 0u, mergedAny ? 1 : 0);
+             aSubtitles ? aSubtitles->entries.Size() : 0u, mergedAny ? 1 : 0);
 #endif
 
     if (!mergedAny)

@@ -102,9 +102,9 @@ Red::CName App::TransmogExtension::OnSelectAppearance(const Red::Handle<Red::Twe
         }
         {
             auto visualTags = Red::GetFlatPtr<Red::DynArray<Red::CName>>({aItemRecord->recordID, ".visualTags"});
-            if (visualTags && visualTags->size == 1)
+            if (visualTags && visualTags->Size() == 1)
             {
-                auto& appearanceName = visualTags->entries[0];
+                auto& appearanceName = (*visualTags)[0];
                 for (const auto& appearanceDefinition : aAppearanceResource->appearances)
                 {
                     if (appearanceDefinition->name == appearanceName)

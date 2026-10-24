@@ -577,9 +577,9 @@ void App::ResourcePatchExtension::OnAppearanceResourceLoad(Red::AppearanceResour
     {
         uint32_t parts = 0;
         for (const auto& definition : aResource->appearances)
-            parts += definition->partsValues.size;
+            parts += definition->partsValues.Size();
         MAC_DIAG("[selftest] R22 ResourcePatch appearance resource \"%s\" patched: %u definitions, %u parts, %zu patch resource(s)\n",
-                 s_resourcePathRegistry->ResolvePathOrHash(aResource->path).c_str(), aResource->appearances.size, parts, patchList.size());
+                 s_resourcePathRegistry->ResolvePathOrHash(aResource->path).c_str(), aResource->appearances.Size(), parts, patchList.size());
     }
 #endif
 }
