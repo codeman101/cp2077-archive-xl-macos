@@ -491,11 +491,11 @@ Red::CString App::GarmentExtension::OnResolveSuffixes(Red::Handle<Red::GameObjec
     auto result = Raw::AppearanceChanger::GetSuffixes(aOwner, aOwnerOverride, aItemRecord, aItemID);
 
     // GetSuffixValue is inlined into the suffix loop of GetSuffixes on the Mac, so the inner sleeves override that the Windows build makes
-    // by replacing GetSuffixValue is applied to the finished suffix string.
-    if (aItemRecord)
-    {
-        AttachmentExtension::ApplyInnerSleevesSuffix(result, aOwner, aItemRecord->recordID, aItemID);
-    }
+    // by replacing GetSuffixValue would have to be applied to the finished suffix string. It is off for now: the override looks the torso
+    // slot up through the transaction system (FindSlotData), and GetSuffixes also runs while the transaction system holds that lock on the
+    // same thread (dressing a new character: the lookup spins forever and the game hangs, sample 2026-10-24 17:46). The Windows build only
+    // overrides when GetSuffixValue's second argument is set; until the Mac has the same condition, the game's own Partial value is kept.
+    (void)aItemID;
 
     return result;
 }
