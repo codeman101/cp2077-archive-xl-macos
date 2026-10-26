@@ -172,7 +172,6 @@
 #include <RED4ext/Scripting/Natives/Generated/world/PrefabProxyMeshNode.hpp>
 #include <RED4ext/Scripting/Natives/Generated/world/RuntimeSystemEntityAppearanceChanger.hpp>
 #include <RED4ext/Scripting/Natives/Generated/world/RuntimeSystemWorldStreaming.hpp>
-#include <RED4ext/Scripting/Natives/Generated/world/SharedDataBuffer.hpp>
 #include <RED4ext/Scripting/Natives/Generated/world/StaticDecalNode.hpp>
 #include <RED4ext/Scripting/Natives/Generated/world/StaticMeshNode.hpp>
 #include <RED4ext/Scripting/Natives/Generated/world/StaticOccluderMeshNode.hpp>
