@@ -12,32 +12,29 @@ log line instead of patching a stub.
 
 | | hashes |
 |---|---|
-| Known to the sources (ArchiveXL 139, SDK 127, shared 2) | 264 |
-| Mapped to a Mac address | 191 |
-| &nbsp;&nbsp;of which ArchiveXL resolver rows | 108 |
+| Known to the sources (ArchiveXL 146, SDK 130, shared 2) | 274 |
+| Mapped to a Mac address | 195 |
+| &nbsp;&nbsp;of which ArchiveXL resolver rows | 109 |
 | &nbsp;&nbsp;of which SDK overlay rows (MacSdkRows.inc) | 41 |
-| &nbsp;&nbsp;of which SDK table rows | 23 |
+| &nbsp;&nbsp;of which SDK table rows | 26 |
 | &nbsp;&nbsp;of which SDK stand-ins and CClass slots | 19 |
-| **Not on Mac yet (trap stub)** | **73** |
-| &nbsp;&nbsp;functions with a declared wrapper (not all reached on Mac, see the status below) | 60 |
-| &nbsp;&nbsp;data (pointers, tables, offsets) | 4 |
-| &nbsp;&nbsp;declared but not used by any live code (commented out or dead) | 9 |
+| **Not on Mac yet (trap stub)** | **79** |
+| &nbsp;&nbsp;functions with a declared wrapper (not all reached on Mac, see the status below) | 66 |
+| &nbsp;&nbsp;data (pointers, tables, offsets) | 3 |
+| &nbsp;&nbsp;declared but not used by any live code (commented out or dead) | 10 |
 
 ## What a trap does to the return value
 
 | class | functions | trap behaviour |
 |---|---|---|
-| void | 36 | nothing to return |
+| void | 41 | nothing to return |
 | scalar | 17 | x0 = 0 |
 | pointer | 5 | x0 = null |
 | float | 1 | v0 = 0.0 and x0 = x1 = 0 (`TRAP_FLT` stub) |
 | pod16 | 1 | x0 = x1 = 0 (a 16 byte plain struct comes back in x0/x1) |
-| data | 4 | a zeroed 512 byte buffer |
-| none | 9 | no live use |
-
-No unmapped function returns a struct by value through x8, and every signature was parsed, so the generic trap is
-safe for all of them. If a later change adds one, this script lists it under "struct-x8" and the self-test in
-`macos/MacR17.cpp` must be extended before it can be called.
+| struct-x8 | 1 | NOT SAFE. A struct returned through x8 (CString, Handle, DynArray, anything with a destructor or over 16 bytes) is not filled in; the caller reads uninitialised memory. |
+| data | 3 | a zeroed 512 byte buffer |
+| none | 10 | no live use |
 
 Functions with a return type other than void, an integer or a plain pointer:
 
@@ -45,6 +42,7 @@ Functions with a return type other than void, an integer or a plain pointer:
 |---|---|---|---|
 | 3491501770 | IRenderProxy_sub_60 | `float` | float |
 | 3578730042 | Memory_PoolStorage_OOM | `AllocationResult` | pod16 |
+| 3857663888 | DeferredDataBuffer_LoadRefAsync | `SharedPtr<DeferredDataBufferCopyToken>` | struct-x8 |
 
 ## By feature area
 
@@ -56,24 +54,27 @@ Reach is by source text and can over-report: for an ArchiveXL wrapper it is ever
 the declaring header when it uses the wrapper itself); for an SDK function it is every file that names both the
 SDK class and the method.
 
-### Declared in ArchiveXL, no live caller (24)
+### Declared in ArchiveXL, no live caller (27)
 
 - `EntityBuilder_ExtractComponentsJob` (func)
 - `CNamePool_RegisterName` (unused): no live use found in the sources
 - `MorphTargetManager_ApplyMorphTarget` (func)
+- `LootResourceData_Read` (unused): no live use found in the sources
 - `TPPRepresentationComponent_IsAffectedSlot` (func): trap returns 0
 - `CharacterCustomizationState_FinalizePart` (unused): no live use found in the sources
-- `AppearanceChanger_GetSuffixValue` (func): trap returns 0
 - `ResourceSerializer_OnResourceReady` (func)
 - `CharacterCustomizationSystem_InitializeOptionsFromState` (unused): no live use found in the sources
+- `ExtensionLoader_AddConfig` (func)
 - `ResourceSerializer_PostLoad` (func)
 - `IPlacedComponent_SetTransform` (func)
+- `AttachmentSlots_UpdateWithExclusiveLock` (func): pointer or reference, trap returns null
 - `Entity_Assemble` (func): trap returns 0
 - `Entity_Detach` (func)
 - `Entity_RequestComponents` (func)
 - `Entity_Dispose` (func)
 - `RuntimeSystemWorldStreaming_LoadWorldJob` (func)
 - `CNamePool_GetStringView` (unused): no live use found in the sources
+- `AppearanceChanger_GetSuffixValue` (func): trap returns 0
 - `CharacterCustomizationHelper_GetHairColor` (func)
 - `Entity_Initialize` (func)
 - `Entity_Uninitialize` (func)
@@ -83,11 +84,14 @@ SDK class and the method.
 - `Entity_Attach` (func)
 - `CharacterCustomizationSystem_GetResource` (func)
 
-### Extensions (6)
+### Extensions (9)
 
-- `MappinSystem_GetPoiData` (func): pointer or reference, trap returns null
+- `ExtensionLoader_Configure` (func)
+- `ExtensionService_Shutdown` (func)
 - `ObjectPackageReader_ReadHeader` (func)
+- `ExtensionService_Bootstrap` (func)
 - `ObjectPackageExtractor_ExtractSync` (func)
+- `MappinSystem_GetPoiData` (func): pointer or reference, trap returns null
 - `MappinSystem_GetMappinData` (func): pointer or reference, trap returns null
 - `ObjectPackageExtractor_ExtractAsync` (func)
 - `CNamePool_AddCString` (func): pointer or reference, trap returns null
@@ -105,7 +109,6 @@ SDK class and the method.
 - `CClass_ClearScriptedData` (func)
 - `CommandListContext_Close` (func)
 - `g_DeviceData` (data): read through a zeroed buffer
-- `DeferredDataBuffer_LoadRefAsync` (func): pointer or reference, trap returns null
 - `IRenderProxy_sub_B0` (func)
 - `CBaseFunction_Handlers` (data): read through a zeroed buffer
 - `ObjectPackageReader_OnReadHeader` (func)
@@ -114,9 +117,7 @@ SDK class and the method.
 - `CBaseRTTIType_sub_A0` (func): trap returns 0
 - `IRenderProxy_sub_58` (func): trap returns 0
 - `Allocator_CreateResource` (func): trap returns 0
-- `ResourceToken_DestructUnk38` (func)
 - `IRenderProxy_sub_78` (func)
-- `CGameEngine` (data): read through a zeroed buffer
 - `ResourceToken_dtor` (unused): no live use found in the sources
 - `IRenderProxy_sub_18` (func): trap returns 0
 - `CBaseRTTIType_sub_90` (func): trap returns 0
@@ -132,8 +133,11 @@ SDK class and the method.
 - `Memory_PoolStorage_OOM` (func): 16 bytes (void* + size_t), returned in x0/x1
 - `ObjectPackageReader_ctor` (unused): no live use found in the sources
 - `IRenderProxy_sub_88` (func): trap returns 0
+- `ResourceToken_DestructUnk38` (func)
 - `CBaseRTTIType_sub_80` (func): trap returns 0
+- `DeferredDataBuffer_LoadRefAsync` (func): returned by value: needs a per-function x8 handler or a mapping before it is called
 - `IRenderProxy_sub_A8` (func): trap returns 0
+- `JobDispatcher_DispatchParallelJob` (func)
 - `CommandListContext_dtor` (func)
 
 ### Red (shared headers) (2)
@@ -150,55 +154,57 @@ reaches it on Mac; it stays a trap), **NEEDED** (ArchiveXL reaches it and it has
 |---|---|---|---|---|---|---|---|
 | 15404457 | `ResourceReference_Load` | SDK | unused |  |  | unreached |  |
 | 302583262 | `IRenderProxy_sub_00` | SDK | func | `void` | `IRenderProxy::sub_00` | unreached |  |
-| 364779332 | `CBaseRTTIType_sub_88` | SDK | func | `bool` | `RED4ext::CBaseRTTIType::sub_88` | unreached |  |
+| 364779332 | `CBaseRTTIType_sub_88` | SDK | func | `bool` | `RED4ext::rtti::IType::sub_88` | unreached |  |
 | 434901863 | `Memory_Vault_Unk1` | SDK | func | `void` |  | unreached |  |
 | 489494088 | `EntityBuilder_ExtractComponentsJob` | Codeware | func | `void` | `Raw::EntityBuilder::ExtractComponentsJob` | unreached |  |
 | 510274732 | `IRenderProxy_sub_80` | SDK | func | `void` | `IRenderProxy::sub_80` | unreached |  |
 | 586028847 | `CRTTIScriptReferenceType_Set` | SDK | func | `void` |  | unreached |  |
 | 587736171 | `ResourceReference_Reset` | SDK | unused |  |  | unreached |  |
-| 620961393 | `MappinSystem_GetPoiData` | Codeware | func | `void*` | `Raw::MappinSystem::GetPoiData` | **NEEDED** | Extension.cpp |
 | 627643257 | `CNamePool_RegisterName` | Codeware | unused |  |  | unreached |  |
 | 633871992 | `MorphTargetManager_ApplyMorphTarget` | Codeware | func | `void` | `Raw::MorphTargetManager::ApplyMorphTarget` | unreached |  |
+| 647500563 | `LootResourceData_Read` | Codeware | unused |  |  | unreached |  |
+| 660606521 | `ExtensionLoader_Configure` | Codeware | func | `void` | `Raw::ExtensionLoader::Configure` | **NEEDED** | ExtensionService.cpp |
 | 677908004 | `LaunchParameters` | SDK | data |  |  | unreached |  |
 | 678894266 | `TPPRepresentationComponent_IsAffectedSlot` | Codeware | func | `bool` | `Raw::TPPRepresentationComponent::IsAffectedSlot` | unreached |  |
 | 716262863 | `CharacterCustomizationState_FinalizePart` | Codeware | unused |  |  | unreached |  |
 | 837947027 | `CClass_ClearScriptedData` | SDK | func | `void` | `RED4ext::CClass::ClearScriptedData` | unreached |  |
 | 956641309 | `GarmentAssemblerState_ChangeCustomItem` | Codeware | func | `bool` | `Raw::GarmentAssemblerState::ChangeCustomItem` | **NEEDED** | GarmentAssembler.hpp |
-| 1003499294 | `AppearanceChanger_GetSuffixValue` | Codeware | func | `bool` | `Raw::AppearanceChanger::GetSuffixValue` | unreached |  |
 | 1147149338 | `ResourceSerializer_OnResourceReady` | Codeware | func | `void` | `Raw::ResourceSerializer::OnResourceReady` | not applicable: Windows load path; the Mac hooks use the two load job bodies (Mac-only ids 0xC0DE0001 and 0xC0DE0002) |  |
 | 1163138096 | `CommandListContext_Close` | SDK | func | `void` | `CommandListContext::Close` | unreached |  |
 | 1168449474 | `CharacterCustomizationSystem_InitializeOptionsFromState` | Codeware | unused |  |  | unreached |  |
 | 1239944840 | `g_DeviceData` | SDK | data |  | `GetDeviceData` | unreached |  |
+| 1255673638 | `ExtensionService_Shutdown` | Codeware | func | `void` | `Raw::ExtensionService::Shutdown` | **NEEDED** | ExtensionService.cpp |
 | 1285757088 | `ObjectPackageReader_ReadHeader` | SDK | func | `void` | `RED4ext::ObjectPackageReader::ReadHeader` | **NEEDED** | Extension.cpp |
+| 1350506587 | `ExtensionLoader_AddConfig` | Codeware | func | `void` | `Raw::ExtensionLoader::AddConfig` | unreached |  |
 | 1350901460 | `ResourceSerializer_PostLoad` | Codeware | func | `void` | `Raw::ResourceSerializer::PostLoad` | unreached |  |
-| 1459046115 | `DeferredDataBuffer_LoadRefAsync` | SDK | func | `void*` | `RED4ext::DeferredDataBuffer::LoadCopyAsync` | unreached |  |
 | 1468405902 | `IRenderProxy_sub_B0` | SDK | func | `void` | `IRenderProxy::sub_B0` | unreached |  |
 | 1518151849 | `CBaseFunction_Handlers` | SDK | data |  | `RED4ext::CBaseFunction::GetHandler` | unreached |  |
+| 1523060616 | `ExtensionService_Bootstrap` | Codeware | func | `void` | `Raw::ExtensionService::Bootstrap` | **NEEDED** | ExtensionService.cpp |
 | 1632836642 | `ObjectPackageReader_OnReadHeader` | SDK | func | `void` | `RED4ext::ObjectPackageReader::OnReadHeader` | unreached |  |
 | 1828854026 | `IPlacedComponent_SetTransform` | Codeware | func | `void` | `Raw::IPlacedComponent::SetTransform` | unreached |  |
 | 1894391003 | `IRenderProxy_sub_90` | SDK | func | `bool` | `IRenderProxy::sub_90` | unreached |  |
 | 1926836641 | `GetFreeCommandList` | SDK | func | `UniquePtr<CommandListContext>*` | `AcquireFreeCommandList` | unreached |  |
 | 2038372664 | `ObjectPackageExtractor_ExtractSync` | SDK | func | `void` | `RED4ext::ObjectPackageExtractor::ExtractSync` | **NEEDED** | Extension.cpp |
+| 2050568765 | `AttachmentSlots_UpdateWithExclusiveLock` | Codeware | func | `void*` | `Raw::AttachmentSlots::UpdateWithExclusiveLock` | unreached |  |
 | 2182550867 | `Entity_Assemble` | Codeware | func | `bool` | `Raw::Entity::Assemble` | unreached |  |
 | 2263681375 | `Entity_Detach` | Codeware | func | `void` | `Raw::Entity::Detach` | unreached |  |
 | 2296260874 | `Entity_RequestComponents` | Codeware | func | `void` | `Raw::Entity::RequestComponents` | unreached |  |
-| 2396396482 | `CBaseRTTIType_sub_A0` | SDK | func | `bool` | `RED4ext::CBaseRTTIType::sub_A0` | unreached |  |
+| 2396396482 | `CBaseRTTIType_sub_A0` | SDK | func | `bool` | `RED4ext::rtti::IType::sub_A0` | unreached |  |
 | 2462126272 | `IRenderProxy_sub_58` | SDK | func | `uint32_t` | `IRenderProxy::sub_58` | unreached |  |
 | 2508272872 | `Allocator_CreateResource` | SDK | func | `HRESULT` | `D3D12MA::Allocator::CreateResource` | unreached |  |
-| 2508398574 | `ResourceToken_DestructUnk38` | SDK | func | `void` | `DeferredDataBufferCopyToken` | not applicable: inlined into ~ResourceToken on Mac (0x21C4A54 to 0x21C4ACC); the SDK destructor skips it on Apple |  |
 | 2515274237 | `Entity_Dispose` | Codeware | func | `void` | `Raw::Entity::Dispose` | unreached |  |
 | 2542474580 | `IRenderProxy_sub_78` | SDK | func | `void` | `IRenderProxy::sub_78` | unreached |  |
-| 2549221846 | `CGameEngine` | SDK | data |  | `RED4ext::CGameEngine::Get` | unreached |  |
 | 2589919757 | `ResourceToken_dtor` | SDK | unused |  |  | unreached |  |
 | 2756580845 | `IRenderProxy_sub_18` | SDK | func | `uint8_t` | `IRenderProxy::sub_18` | unreached |  |
-| 2757309857 | `CBaseRTTIType_sub_90` | SDK | func | `bool` | `RED4ext::CBaseRTTIType::sub_90` | unreached |  |
+| 2757309857 | `CBaseRTTIType_sub_90` | SDK | func | `bool` | `RED4ext::rtti::IType::sub_90` | unreached |  |
 | 2786924000 | `CommandListContext_FlushPendingBarriers` | SDK | func | `void` | `CommandListContext::FlushPendingBarriers` | unreached |  |
 | 2814122829 | `CommandListContext_AddPendingBarrier` | SDK | func | `void` | `CommandListContext::AddPendingBarrier` | unreached |  |
 | 2872059340 | `RuntimeSystemWorldStreaming_LoadWorldJob` | Codeware | func | `void` | `Raw::RuntimeSystemWorldStreaming::LoadWorldJob` | unreached |  |
 | 2878476560 | `CNamePool_GetStringView` | Codeware | unused |  |  | unreached |  |
-| 2930319133 | `CBaseRTTIType_sub_98` | SDK | func | `bool` | `RED4ext::CBaseRTTIType::sub_98` | unreached |  |
+| 2918455690 | `MappinSystem_GetPoiData` | Codeware | func | `void*` | `Raw::MappinSystem::GetPoiData` | **NEEDED** | Extension.cpp |
+| 2930319133 | `CBaseRTTIType_sub_98` | SDK | func | `bool` | `RED4ext::rtti::IType::sub_98` | unreached |  |
 | 3063747982 | `ResourceReference_Fetch` | SDK | unused |  |  | unreached |  |
-| 3299551353 | `MappinSystem_GetMappinData` | Codeware | func | `void*` | `Raw::MappinSystem::GetMappinData` | **NEEDED** | Extension.cpp |
+| 3294244838 | `AppearanceChanger_GetSuffixValue` | Codeware | func | `bool` | `Raw::AppearanceChanger::GetSuffixValue` | unreached |  |
 | 3410956665 | `BasePackageReader_ReadHeader` | SDK | func | `void` | `RED4ext::PackageReader::ReadHeader` | unreached |  |
 | 3414699684 | `CharacterCustomizationHelper_GetHairColor` | Codeware | func | `void` | `Raw::CharacterCustomizationHelper::GetHairColor` | unreached |  |
 | 3414823260 | `CRTTIScriptReferenceType_ctor` | SDK | func | `void` |  | unreached |  |
@@ -208,21 +214,25 @@ reaches it on Mac; it stays a trap), **NEEDED** (ArchiveXL reaches it and it has
 | 3516862860 | `IRenderProxy_sub_98` | SDK | func | `void` | `IRenderProxy::sub_98` | unreached |  |
 | 3578730042 | `Memory_PoolStorage_OOM` | SDK | func | `AllocationResult` |  | unreached |  |
 | 3596356635 | `Entity_Uninitialize` | Codeware | func | `void` | `Raw::Entity::Uninitialize` | unreached |  |
+| 3603701972 | `MappinSystem_GetMappinData` | Codeware | func | `void*` | `Raw::MappinSystem::GetMappinData` | **NEEDED** | Extension.cpp |
 | 3628731410 | `ObjectPackageReader_ctor` | SDK | unused |  |  | unreached |  |
 | 3724941976 | `IRenderProxy_sub_88` | SDK | func | `bool` | `IRenderProxy::sub_88` | unreached |  |
 | 3740082313 | `GarmentAssemblerState_ChangeItem` | Codeware | func | `bool` | `Raw::GarmentAssemblerState::ChangeItem` | **NEEDED** | GarmentAssembler.hpp |
 | 3819248393 | `ObjectPackageExtractor_ExtractAsync` | SDK | func | `void` | `RED4ext::ObjectPackageExtractor::ExtractAsync` | **NEEDED** | Extension.cpp |
-| 3832485534 | `CBaseRTTIType_sub_80` | SDK | func | `bool` | `RED4ext::CBaseRTTIType::sub_80` | unreached |  |
+| 3830783422 | `ResourceToken_DestructUnk38` | SDK | func | `void` | `DeferredDataBufferCopyToken` | not applicable: inlined into ~ResourceToken on Mac (0x21C4A54 to 0x21C4ACC); the SDK destructor skips it on Apple |  |
+| 3832485534 | `CBaseRTTIType_sub_80` | SDK | func | `bool` | `RED4ext::rtti::IType::sub_80` | unreached |  |
 | 3842971216 | `AISpotPersistentDataArray_Reserve` | Codeware | func | `void` | `Raw::AISpotPersistentDataArray::Reserve` | unreached |  |
+| 3857663888 | `DeferredDataBuffer_LoadRefAsync` | SDK | func | `SharedPtr<DeferredDataBufferCopyToken>` | `RED4ext::DeferredDataBuffer::LoadCopyAsync` | unreached |  |
 | 4002093843 | `ImpostorComponent_OnAttach` | Codeware | func | `void` | `Raw::ImpostorComponent::OnAttach` | unreached |  |
 | 4096926792 | `IRenderProxy_sub_A8` | SDK | func | `uint8_t` | `IRenderProxy::sub_A8` | unreached |  |
+| 4117243690 | `JobDispatcher_DispatchParallelJob` | SDK | func | `void` | `RED4ext::JobQueue::DispatchJob` | unreached |  |
 | 4219677283 | `AppearanceChanger_GetBaseMeshOffset` | Codeware | func | `int32_t` | `Raw::AppearanceChanger::GetBaseMeshOffset` | unreached |  |
 | 4228123904 | `CommandListContext_dtor` | SDK | func | `void` | `CommandListContext` | unreached |  |
 | 4248638169 | `Entity_Attach` | Codeware | func | `void` | `Raw::Entity::Attach` | unreached |  |
 | 4275058446 | `CharacterCustomizationSystem_GetResource` | Codeware | func | `void` | `Raw::CharacterCustomizationSystem::GetResource` | unreached |  |
 | 4292220681 | `CNamePool_AddCString` | SDK | func | `CName*` | `RED4ext::CNamePool::Add` | not applicable: the Windows table address is an unrelated vtable slot and the function is inlined; the const char* overload (CNamePool_AddCstr) is mapped and used | Extension.cpp, Dynamic.cpp, Prefix.cpp, Extension.cpp, Extension.cpp, Config.cpp |
 
-Totals: NEEDED 7, not applicable 3, unreached 63.
+Totals: NEEDED 10, not applicable 3, unreached 66.
 
 ## Address, vtable and field offset checks
 
@@ -246,9 +256,9 @@ Marked in the sources with a `MAC-NOT-YET:` comment.
 
 | file | line | what |
 |---|---|---|
-| src/App/Application.cpp | 24 | no SpdlogProvider (log lines go to stderr with the prefix "[axl]"; the launcher captures them), no |
+| src/App/Application.cpp | 25 | no SpdlogProvider (log lines go to stderr with the prefix "[axl]"; the launcher captures them), no |
 | src/App/Utils/Registers.hpp | 12 | the x64 register helpers (Registers.asm) have no arm64 counterpart. The Journal extension used them to carry r8 and r9 |
-| macos/MacSdkRows.inc | 51 | ResourceToken_DestructUnk38 (Windows 0x28B814) has no Mac function; the game inlines that release in ~ResourceToken (0x21C4A54 to 0x21C4ACC). The SDK ~ResourceToken skips it on Apple, so a token the SDK destroys leaks its Unk38 request object. Not applicable as a row. |
+| macos/MacSdkRows.inc | 52 | ResourceToken_DestructUnk38 (Windows 0x28B814) has no Mac function; the game inlines that release in ~ResourceToken (0x21C4A54 to 0x21C4ACC). The SDK ~ResourceToken skips it on Apple, so a token the SDK destroys leaks its Unk38 request object. Not applicable as a row. |
 
 <!-- the following sections are hand-written in tools/mac/not-yet-notes.md -->
 

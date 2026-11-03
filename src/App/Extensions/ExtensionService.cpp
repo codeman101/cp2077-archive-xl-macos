@@ -63,9 +63,13 @@ void App::ExtensionService::OnBootstrap()
         m_loader->OnTweakDBReady();
     }).OrThrow();
 
+#ifndef __APPLE__
     Hook<Raw::ExtensionService::Bootstrap>(+[](void*) {}).OrThrow();
     Hook<Raw::ExtensionService::Shutdown>(+[](void*) {}).OrThrow();
     Hook<Raw::ExtensionLoader::Configure>(+[](void*) {}).OrThrow();
+#else
+    // No Mac addresses for the game's built-in extension service yet (macos/NOT_YET.md). It stays on, as with ArchiveXL 1.27 on macOS.
+#endif
 
     Raw::InkSpawner::ControllerInjectionEnabled::Ref() = false;
 }

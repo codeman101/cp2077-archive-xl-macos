@@ -61,6 +61,8 @@ Red::AddressLib::InkWidgetLibrary_SpawnFromLocal,
 Red::AddressLib::InkWidgetLibrary_SpawnFromExternal,
 Red::AddressLib::InkWidgetLibrary_AsyncSpawnFromLocal,
 Red::AddressLib::InkWidgetLibrary_AsyncSpawnFromExternal,
+// ArchiveXL 1.28 clears this flag in ExtensionService::OnBootstrap. One byte in __DATA,__common (zerofill, writable), same row as Codeware.
+Red::AddressLib::InkSpawner_ControllerInjectionEnabled,
 Red::AddressLib::InkSpawner_FinishAsyncSpawn,
 // Module d, animation. Body twin of Windows 0x46B7B4: same offsets (+0x1B8, +0x190, +0x70, +0x7C, +0x80) and call shape; (entAnimatedComponent*).
 Red::AddressLib::AnimatedComponent_InitializeAnimations,
