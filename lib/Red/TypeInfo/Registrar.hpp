@@ -2,6 +2,7 @@
 
 #if defined(__APPLE__)
 #include <dlfcn.h>
+#include <pthread.h>
 #include <cstdio>
 #include <cstdlib>
 #endif
@@ -22,7 +23,7 @@ public:
     static inline void RegisterDiscovered()
     {
         // Assumed to be called at plugin bootstrap, on the game's main thread.
-        s_mainThread = GetCurrentThreadId();
+        s_mainThread = CurrentThreadId();
 
         QueuePendingRegisterCallbacks();
         QueuePendingDescribeCallbacks();
@@ -66,10 +67,20 @@ public:
     {
         const auto mainThread = s_mainThread.load();
 
-        return mainThread == 0 || mainThread == GetCurrentThreadId();
+        return mainThread == 0 || mainThread == CurrentThreadId();
     }
 
 private:
+    static inline uint32_t CurrentThreadId()
+    {
+#if defined(__APPLE__)
+        // The mach thread port stands in for the Windows GetCurrentThreadId().
+        return static_cast<uint32_t>(pthread_mach_thread_np(pthread_self()));
+#else
+        return GetCurrentThreadId();
+#endif
+    }
+
     static inline void QueuePendingRegisterCallbacks()
     {
         if (!s_registerCallbacks.empty())
