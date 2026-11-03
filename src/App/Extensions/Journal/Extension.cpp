@@ -65,7 +65,11 @@ void App::JournalExtension::Reload()
     }
 }
 
+#ifdef __APPLE__
+void App::JournalExtension::OnLoadJournal(uintptr_t aTree, Red::JobGroup& aJobGroup)
+#else
 void App::JournalExtension::OnLoadJournal(uintptr_t aTree, uintptr_t aIndexToken, Red::JobQueue& aJobQueue)
+#endif
 {
     LogInfo("[{}] Journal tree is initializing...", ExtensionName);
 
@@ -75,6 +79,9 @@ void App::JournalExtension::OnLoadJournal(uintptr_t aTree, uintptr_t aIndexToken
         return;
     }
 
+#ifdef __APPLE__
+    auto aJobQueue = Red::JobQueue(aJobGroup);
+#endif
     auto loader = Red::ResourceLoader::Get();
 
     for (const auto& unit : m_configs)
