@@ -358,6 +358,7 @@ bool App::AttachmentExtension::OnGetSuffixValue(Raw::AppearanceChanger::GetSuffi
 }
 #endif
 
+#if !defined(__APPLE__)
 void* App::AttachmentExtension::OnUpdateWithExclusiveLock(void* a1, void* a2, void* a3, void* a4)
 {
     const auto previous = s_skipVisualTagCheck;
@@ -366,6 +367,7 @@ void* App::AttachmentExtension::OnUpdateWithExclusiveLock(void* a1, void* a2, vo
     s_skipVisualTagCheck = previous;
     return result;
 }
+#endif
 
 bool App::AttachmentExtension::IsVisualTagActive(Red::Handle<Red::Entity>& aOwner,
                                                  Red::TweakDBID aBaseSlotID, Red::CName aVisualTag,

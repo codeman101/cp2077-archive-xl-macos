@@ -75,6 +75,8 @@ constexpr auto AsyncSpawnFromExternal = Core::RawFunc<
 
 namespace Raw::InkSpawner
 {
+using ControllerInjectionEnabled = Core::RawPtr<Red::AddressLib::InkSpawner_ControllerInjectionEnabled, bool>;
+
 constexpr auto FinishAsyncSpawn = Core::RawFunc<
     /* addr = */ Red::AddressLib::InkSpawner_FinishAsyncSpawn,
     /* type = */ void (*)(
