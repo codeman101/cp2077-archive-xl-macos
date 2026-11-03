@@ -7,6 +7,16 @@
 
 namespace
 {
+// The 2.5 inner node slot (0x80): innerNodeIndex in the Mac SDK, instanceIndex in psiberx's SDK.
+inline auto& InnerIndex(auto& aSetup)
+{
+#ifdef __APPLE__
+    return aSetup.innerNodeIndex;
+#else
+    return aSetup.instanceIndex;
+#endif
+}
+
 constexpr auto ExtensionName = "WorldStreaming";
 
 constexpr auto MainWorldResource = Red::ResourcePath(R"(base\worlds\03_night_city\_compiled\default\03_night_city.streamingworld)");
@@ -223,9 +233,9 @@ bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSecto
             {
                 auto collisionNode = Red::Cast<Red::worldCookedCollisionNode>(nodeDefinition);
                 auto innerNodes = collisionNode->GetInnerNodes();
-                if (nodeSetup.innerNodeIndex < innerNodes.Size())
+                if (InnerIndex(nodeSetup) < innerNodes.Size())
                 {
-                    auto& innerNode = innerNodes[nodeSetup.innerNodeIndex];
+                    auto& innerNode = innerNodes[InnerIndex(nodeSetup)];
                     if (innerNode.numActors != nodeMutation.expectedElements)
                     {
                         LogError(R"([{}] {}: The target node #{} has {} actor(s), but the mod expects {}.)",
@@ -239,7 +249,7 @@ bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSecto
             else if (nodeMutation.nodeType == InstancedMeshNodeType)
             {
                 auto* meshNode = Red::Cast<Red::worldInstancedMeshNode>(nodeDefinition);
-                auto instanceCount = meshNode->transformRanges[nodeSetup.innerNodeIndex].numTransforms;
+                auto instanceCount = meshNode->transformRanges[InnerIndex(nodeSetup)].numTransforms;
                 if (instanceCount != nodeMutation.expectedElements)
                 {
                     LogError(R"([{}] {}: The target node #{} has {} instance(s), but the mod expects {}.)",
@@ -329,9 +339,9 @@ bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSecto
             {
                 auto collisionNode = Red::Cast<Red::worldCookedCollisionNode>(nodeDefinition);
                 auto innerNodes = collisionNode->GetInnerNodes();
-                if (nodeSetup.innerNodeIndex < innerNodes.Size())
+                if (InnerIndex(nodeSetup) < innerNodes.Size())
                 {
-                    auto& innerNode = innerNodes[nodeSetup.innerNodeIndex];
+                    auto& innerNode = innerNodes[InnerIndex(nodeSetup)];
 
                     if (innerNode.numActors != nodeDeletion.expectedElements)
                     {
@@ -344,7 +354,7 @@ bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSecto
 
                     if (!nodeDeletion.elementDeletions.empty())
                     {
-                        auto collisionData = collisionNode->GetCollisionDataView(nodeSetup.innerNodeIndex);
+                        auto collisionData = collisionNode->GetCollisionDataView(InnerIndex(nodeSetup));
 
                         for (const auto& elementDeletion : nodeDeletion.elementDeletions)
                         {
@@ -375,7 +385,7 @@ bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSecto
             else if (nodeDeletion.nodeType == InstancedMeshNodeType)
             {
                 auto* meshNode = Red::Cast<Red::worldInstancedMeshNode>(nodeDefinition);
-                auto instanceCount = meshNode->transformRanges[nodeSetup.innerNodeIndex].numTransforms;
+                auto instanceCount = meshNode->transformRanges[InnerIndex(nodeSetup)].numTransforms;
                 if (instanceCount != nodeDeletion.expectedElements)
                 {
                     LogError(R"([{}] {}: The target node #{} has {} instance(s), but the mod expects {}.)",
@@ -433,41 +443,41 @@ bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSecto
             }
             else if (auto* instancedMeshNode = Red::Cast<Red::worldInstancedMeshNode>(nodeDefinition))
             {
-                if (nodeSetup.innerNodeIndex < instancedMeshNode->cookedInstances.Size())
+                if (InnerIndex(nodeSetup) < instancedMeshNode->cookedInstances.Size())
                 {
-                    instancedMeshNode->cookedInstances[nodeSetup.innerNodeIndex].mesh.path = nodeMutation.resourcePath;
+                    instancedMeshNode->cookedInstances[InnerIndex(nodeSetup)].mesh.path = nodeMutation.resourcePath;
                 }
             }
             else if (auto* cookedMeshNode = Red::Cast<Red::worldCookedStaticMeshNode>(nodeDefinition))
             {
                 auto innerNodes = cookedMeshNode->GetInnerNodes();
-                if (nodeSetup.innerNodeIndex < innerNodes.Size())
+                if (InnerIndex(nodeSetup) < innerNodes.Size())
                 {
-                    innerNodes[nodeSetup.innerNodeIndex].mesh.path = nodeMutation.resourcePath;
+                    innerNodes[InnerIndex(nodeSetup)].mesh.path = nodeMutation.resourcePath;
                 }
             }
             else if (auto* cookedDecalNode = Red::Cast<Red::worldCookedStaticDecalNode>(nodeDefinition))
             {
                 auto innerNodes = cookedDecalNode->GetInnerNodes();
-                if (nodeSetup.innerNodeIndex < innerNodes.Size())
+                if (InnerIndex(nodeSetup) < innerNodes.Size())
                 {
-                    innerNodes[nodeSetup.innerNodeIndex].material.path = nodeMutation.resourcePath;
+                    innerNodes[InnerIndex(nodeSetup)].material.path = nodeMutation.resourcePath;
                 }
             }
             else if (auto* cookedProxyNode = Red::Cast<Red::worldCookedGenericProxyMeshNode>(nodeDefinition))
             {
                 auto innerNodes = cookedProxyNode->GetInnerNodes();
-                if (nodeSetup.innerNodeIndex < innerNodes.Size())
+                if (InnerIndex(nodeSetup) < innerNodes.Size())
                 {
-                    innerNodes[nodeSetup.innerNodeIndex].mesh.path = nodeMutation.resourcePath;
+                    innerNodes[InnerIndex(nodeSetup)].mesh.path = nodeMutation.resourcePath;
                 }
             }
             else if (auto* cookedAcousticNode = Red::Cast<Red::worldCookedAcousticSectorNode>(nodeDefinition))
             {
                 auto innerNodes = cookedAcousticNode->GetInnerNodes();
-                if (nodeSetup.innerNodeIndex < innerNodes.Size())
+                if (InnerIndex(nodeSetup) < innerNodes.Size())
                 {
-                    innerNodes[nodeSetup.innerNodeIndex].data.path = nodeMutation.resourcePath;
+                    innerNodes[InnerIndex(nodeSetup)].data.path = nodeMutation.resourcePath;
                 }
             }
             else if (auto* entityNode = Red::Cast<Red::worldEntityNode>(nodeDefinition))
@@ -512,25 +522,25 @@ bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSecto
             }
             else if (auto* instancedMeshNode = Red::Cast<Red::worldInstancedMeshNode>(nodeDefinition))
             {
-                if (nodeSetup.innerNodeIndex < instancedMeshNode->cookedInstances.Size())
+                if (InnerIndex(nodeSetup) < instancedMeshNode->cookedInstances.Size())
                 {
-                    instancedMeshNode->cookedInstances[nodeSetup.innerNodeIndex].meshAppearance = nodeMutation.appearanceName;
+                    instancedMeshNode->cookedInstances[InnerIndex(nodeSetup)].meshAppearance = nodeMutation.appearanceName;
                 }
             }
             else if (auto* cookedMeshNode = Red::Cast<Red::worldCookedStaticMeshNode>(nodeDefinition))
             {
                 auto innerNodes = cookedMeshNode->GetInnerNodes();
-                if (nodeSetup.innerNodeIndex < innerNodes.Size())
+                if (InnerIndex(nodeSetup) < innerNodes.Size())
                 {
-                    innerNodes[nodeSetup.innerNodeIndex].meshAppearance = nodeMutation.appearanceName;
+                    innerNodes[InnerIndex(nodeSetup)].meshAppearance = nodeMutation.appearanceName;
                 }
             }
             else if (auto* cookedProxyNode = Red::Cast<Red::worldCookedGenericProxyMeshNode>(nodeDefinition))
             {
                 auto innerNodes = cookedProxyNode->GetInnerNodes();
-                if (nodeSetup.innerNodeIndex < innerNodes.Size())
+                if (InnerIndex(nodeSetup) < innerNodes.Size())
                 {
-                    innerNodes[nodeSetup.innerNodeIndex].meshAppearance = nodeMutation.appearanceName;
+                    innerNodes[InnerIndex(nodeSetup)].meshAppearance = nodeMutation.appearanceName;
                 }
             }
             else if (auto* entityNode = Red::Cast<Red::worldEntityNode>(nodeDefinition))
@@ -568,9 +578,9 @@ bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSecto
             else if (auto* cookedPoxyDefinition = Red::Cast<Red::worldCookedGenericProxyMeshNode>(nodeDefinition))
             {
                 auto innerNodes = cookedPoxyDefinition->GetInnerNodes();
-                if (nodeSetup.innerNodeIndex < innerNodes.Size())
+                if (InnerIndex(nodeSetup) < innerNodes.Size())
                 {
-                    innerNodes.At(nodeSetup.innerNodeIndex).nbNodesUnderProxy += nodeMutation.nbNodesUnderProxyDiff;
+                    innerNodes.At(InnerIndex(nodeSetup)).nbNodesUnderProxy += nodeMutation.nbNodesUnderProxyDiff;
                 }
             }
         }
@@ -605,9 +615,9 @@ bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSecto
                 auto* collisionNode = Red::Cast<Red::worldCookedCollisionNode>(nodeDefinition);
                 auto innerNodes = collisionNode->GetInnerNodes();
 
-                if (nodeSetup.innerNodeIndex < innerNodes.Size())
+                if (InnerIndex(nodeSetup) < innerNodes.Size())
                 {
-                    auto collisionData = collisionNode->GetCollisionDataView(nodeSetup.innerNodeIndex);
+                    auto collisionData = collisionNode->GetCollisionDataView(InnerIndex(nodeSetup));
 
                     for (const auto& elementMutation : nodeMutation.elementMutations)
                     {
@@ -631,7 +641,7 @@ bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSecto
             if (nodeMutation.nodeType == InstancedMeshNodeType)
             {
                 auto meshNode = Red::Cast<Red::worldInstancedMeshNode>(nodeDefinition);
-                auto startIndex = meshNode->transformRanges[nodeSetup.innerNodeIndex].transformStartIndex;
+                auto startIndex = meshNode->transformRanges[InnerIndex(nodeSetup)].transformStartIndex;
 
                 for (const auto& elementMutation : nodeMutation.elementMutations)
                 {
@@ -715,9 +725,9 @@ bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSecto
                 auto* collisionNode = Red::Cast<Red::worldCookedCollisionNode>(nodeDefinition);
                 auto innerNodes = collisionNode->GetInnerNodes();
 
-                if (nodeSetup.innerNodeIndex < innerNodes.Size())
+                if (InnerIndex(nodeSetup) < innerNodes.Size())
                 {
-                    auto collisionData = collisionNode->GetCollisionDataView(nodeSetup.innerNodeIndex);
+                    auto collisionData = collisionNode->GetCollisionDataView(InnerIndex(nodeSetup));
 
                     for (const auto& elementDeletion : nodeDeletion.elementDeletions)
                     {
@@ -739,7 +749,7 @@ bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSecto
             if (nodeDeletion.nodeType == InstancedMeshNodeType)
             {
                 auto* meshNode = Red::Cast<Red::worldInstancedMeshNode>(nodeDefinition);
-                auto startIndex = meshNode->transformRanges[nodeSetup.innerNodeIndex].transformStartIndex;
+                auto startIndex = meshNode->transformRanges[InnerIndex(nodeSetup)].transformStartIndex;
 
                 for (const auto& elementDeletion : nodeDeletion.elementDeletions)
                 {
@@ -769,8 +779,8 @@ bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSecto
         if (nodeDeletion.nodeType == InstancedMeshNodeType)
         {
             auto* meshNode = Red::Cast<Red::worldInstancedMeshNode>(nodeDefinition);
-            auto startIndex = meshNode->transformRanges[nodeSetup.innerNodeIndex].transformStartIndex;
-            auto numElements = meshNode->transformRanges[nodeSetup.innerNodeIndex].numTransforms;
+            auto startIndex = meshNode->transformRanges[InnerIndex(nodeSetup)].transformStartIndex;
+            auto numElements = meshNode->transformRanges[InnerIndex(nodeSetup)].numTransforms;
             for (auto i = 0; i < numElements; ++i)
             {
                 auto& transform = meshNode->cookedWorldTransformsBuffer[startIndex + i];
@@ -802,7 +812,7 @@ bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSecto
 
         if (aSector->compiled.buffer.version >= 68)
         {
-            nodeSetup.innerNodeIndex = -1;
+            InnerIndex(nodeSetup) = -1;
         }
     }
 
