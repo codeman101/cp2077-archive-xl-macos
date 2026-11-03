@@ -45,8 +45,8 @@ constexpr auto LoadArchives = Core::RawFunc<
                           Red::ArchiveGroup& aGroup,
                           const Red::DynArray<Red::CString>& aArchivePaths,
                           Red::DynArray<Red::ResourcePath>& aLoadedResourcePaths,
-                          uint32_t aMemoryResident,
-                          uint8_t aMode)>{}; // 2.5: base archives pass 2, mods pass 0
+                          int32_t aMode,
+                          uint8_t aFailSeverity)>{};
 #endif
 
 #if defined(__APPLE__)

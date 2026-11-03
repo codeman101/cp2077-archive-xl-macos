@@ -4,6 +4,11 @@ namespace Red::AddressLib
 {
 constexpr uint32_t Main = 240386859;
 
+constexpr uint32_t ExtensionService_Bootstrap = 1523060616;
+constexpr uint32_t ExtensionService_Shutdown = 1255673638;
+constexpr uint32_t ExtensionLoader_Configure = 660606521;
+constexpr uint32_t ExtensionLoader_AddConfig = 1350506587;
+
 constexpr uint32_t AISpotPersistentDataArray_Reserve = 3842971216;
 constexpr uint32_t AIWorkspotManager_RegisterSpots = 2515346652;
 
@@ -29,6 +34,7 @@ constexpr uint32_t AppearanceResource_FindAppearanceDefinition = 549398675;
 constexpr uint32_t AttachmentSlots_InitializeSlots = 3224838039;
 constexpr uint32_t AttachmentSlots_IsSlotEmpty = 4231927464;
 constexpr uint32_t AttachmentSlots_IsSlotSpawning = 1283201918;
+constexpr uint32_t AttachmentSlots_UpdateWithExclusiveLock = 2050568765;
 
 constexpr uint32_t BufferReader_MakeType0 = 1299073554;
 constexpr uint32_t BufferReader_MakeType1 = 3578095989;
@@ -128,14 +134,15 @@ constexpr uint32_t GarmentAssemblerState_ChangeCustomItem = 956641309;
 
 constexpr uint32_t ImpostorComponent_OnAttach = 4002093843;
 
-constexpr uint32_t InkSpawner_FinishAsyncSpawn = 4097515464; // 2.5 (2.31: 2698985195)
+constexpr uint32_t InkSpawner_FinishAsyncSpawn = 4097515464;
+constexpr uint32_t InkSpawner_ControllerInjectionEnabled = 2890273101;
 
-constexpr uint32_t InkWidgetLibrary_AsyncSpawnFromExternal = 225197914; // 2.5 (2.31: 1396063719)
-constexpr uint32_t InkWidgetLibrary_AsyncSpawnFromLocal = 2342073570; // 2.5 (2.31: 118698863)
+constexpr uint32_t InkWidgetLibrary_AsyncSpawnFromExternal = 225197914;
+constexpr uint32_t InkWidgetLibrary_AsyncSpawnFromLocal = 2342073570;
 constexpr uint32_t InkWidgetLibrary_SpawnFromExternal = 506278179;
 constexpr uint32_t InkWidgetLibrary_SpawnFromLocal = 1158555307;
 
-constexpr uint32_t InkWorldLayer_UpdateComponents = 2254060789; // 2.5 (2.31: 1693194103)
+constexpr uint32_t InkWorldLayer_UpdateComponents = 2254060789;
 
 constexpr uint32_t ItemFactoryAppearanceChangeRequest_LoadTemplate = 1291460507;
 constexpr uint32_t ItemFactoryAppearanceChangeRequest_LoadAppearance = 3392610574;
@@ -151,15 +158,17 @@ constexpr uint32_t JournalManager_TrackQuest = 3274382593;
 
 constexpr uint32_t JournalRootFolderEntry_Initialize = 1945256833;
 
-constexpr uint32_t JournalTree_ProcessJournalIndex = 837162664; // not found on 2.5
+constexpr uint32_t JournalTree_ProcessJournalIndex = 2052144225; // 2.5 value (was 837162664, not the 2.5 hash)
 
 constexpr uint32_t Localization_LoadOnScreens = 3550098299;
 constexpr uint32_t Localization_LoadSubtitles = 772484645;
 constexpr uint32_t Localization_LoadVoiceOvers = 4223669659;
 constexpr uint32_t Localization_LoadLipsyncs = 1488657506;
 
-constexpr uint32_t MappinSystem_GetMappinData = 3299551353;
-constexpr uint32_t MappinSystem_GetPoiData = 2918455690; // 2.5 (2.31: 620961393)
+constexpr uint32_t LootResourceData_Read = 647500563;
+
+constexpr uint32_t MappinSystem_GetMappinData = 3603701972;
+constexpr uint32_t MappinSystem_GetPoiData = 2918455690;
 constexpr uint32_t MappinSystem_OnStreamingWorldLoaded = 140387944;
 #if defined(__APPLE__)
 // macOS only (R22). The Mac getters above are 16 byte wrappers (load the resource, branch to a finder); the finders behind them are the
@@ -192,7 +201,7 @@ constexpr uint32_t ResourceLoader_RequestResource = 2365013187; // res::Resource
 // macOS only (R22). The Mac ByPath entry (Windows 0x2253C8) inlines IssueLoadingRequest, so a link redirect needs a hook on it as well.
 constexpr uint32_t ResourceLoader_IssueLoadingRequestByPath = 1250309504;
 #endif
-constexpr uint32_t ResourceLoader_OnUpdate = 1303056161; // not found on 2.5 (Windows)
+constexpr uint32_t ResourceLoader_OnUpdate = 3955625134; // 2.5 value (was 1303056161)
 
 constexpr uint32_t ResourcePath_Create = 3998356057;
 

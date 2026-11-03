@@ -11,29 +11,16 @@ constexpr auto ExtensionName = "WorldStreaming";
 
 constexpr auto MainWorldResource = Red::ResourcePath(R"(base\worlds\03_night_city\_compiled\default\03_night_city.streamingworld)");
 constexpr auto CollisionNodeType = Red::GetTypeName<Red::worldCollisionNode>();
+constexpr auto CookedCollisionNodeType = Red::GetTypeName<Red::worldCookedCollisionNode>();
 constexpr auto AdvertisementNodeType = Red::GetTypeName<Red::worldAdvertisementNode>();
 constexpr auto StaticMeshNodeType = Red::GetTypeName<Red::worldStaticMeshNode>();
+constexpr auto CookedStaticMeshNodeType = Red::GetTypeName<Red::worldCookedStaticMeshNode>();
 constexpr auto InstancedMeshNodeType = Red::GetTypeName<Red::worldInstancedMeshNode>();
 constexpr auto InstancedDestructibleNodeType = Red::GetTypeName<Red::worldInstancedDestructibleMeshNode>();
 
 constexpr auto DelZ = static_cast<int32_t>(-2000 * (2 << 16));
-constexpr auto NoCollisionPreset = Red::CName("No Collision");
 
 Red::Handle<Red::worldStaticMeshNode> s_dummyNode;
-Core::Map<Red::ResourcePath, Core::Map<int64_t, Red::CName*>> s_collisionNodeOverrides;
-
-// Game 2.5 keeps the resolved node pointer in the setup (+0x50, written by the node fix-up),
-// the packed node index is only a fallback and is bounds checked.
-Red::worldNode* ResolveNode(Red::StreamingSectorNodeBuffer& aBuffer, Red::CompiledNodeInstanceSetupInfo* aNodeSetup)
-{
-    if (aNodeSetup->node)
-        return aNodeSetup->node;
-
-    if (aNodeSetup->nodeIndex < aBuffer.nodes.Size())
-        return aBuffer.nodes[static_cast<uint32_t>(aNodeSetup->nodeIndex)].instance;
-
-    return nullptr;
-}
 }
 
 std::string_view App::WorldStreamingExtension::GetName()
@@ -186,11 +173,10 @@ void App::WorldStreamingExtension::OnSectorPostLoad(Red::world::StreamingSector*
         LogWarning("[{}] No patches have been applied to \"{}\".", ExtensionName, sectorPath);
 }
 
-bool App::WorldStreamingExtension::PatchSector(Red::world::StreamingSector* aSector,
+bool App::WorldStreamingExtension::PatchSector(Red::worldStreamingSector* aSector,
                                                const App::WorldSectorMod& aSectorMod)
 {
-    auto& buffer = Raw::StreamingSector::NodeBuffer::Ref(aSector);
-    auto nodeCount = buffer.nodeSetups.GetInstanceCount();
+    auto nodeCount = aSector->compiled.buffer.nodeSetups.Size();
 
     if (nodeCount != aSectorMod.expectedNodes)
     {
@@ -203,17 +189,8 @@ bool App::WorldStreamingExtension::PatchSector(Red::world::StreamingSector* aSec
 
     for (const auto& nodeMutation : aSectorMod.nodeMutations)
     {
-        auto* nodeSetup = buffer.nodeSetups.GetInstance(nodeMutation.nodeIndex);
-        auto* nodeDefinition = ResolveNode(buffer, nodeSetup);
-
-        if (!nodeDefinition)
-        {
-            LogError(R"([{}] {}: The target node #{} can't be resolved (node index {} of {}).)",
-                     ExtensionName, aSectorMod.mod, nodeMutation.nodeIndex,
-                     static_cast<uint32_t>(nodeSetup->nodeIndex), buffer.nodes.Size());
-            nodeValidationPassed = false;
-            continue;
-        }
+        auto& nodeSetup = aSector->compiled.buffer.nodeSetups.At(nodeMutation.nodeIndex);
+        auto* nodeDefinition = aSector->compiled.nodes[nodeSetup.nodeIndex].instance;
 
         if (nodeMutation.nodeType != nodeDefinition->GetNativeType()->name)
         {
@@ -230,26 +207,67 @@ bool App::WorldStreamingExtension::PatchSector(Red::world::StreamingSector* aSec
         // cooked), so element level edits can't be applied safely yet. Whole node edits still work.
         if (!nodeMutation.elementMutations.empty())
         {
-            LogError(R"([{}] {}: The target node #{} has type {}, element edits for this type are not supported on game 2.5.)",
-                     ExtensionName, aSectorMod.mod, nodeMutation.nodeIndex, nodeMutation.nodeType.ToString());
-            nodeValidationPassed = false;
-            continue;
+            if (nodeMutation.nodeType == CollisionNodeType)
+            {
+                auto collisionNode = Red::Cast<Red::worldCollisionNode>(nodeDefinition);
+                if (collisionNode->numActors != nodeMutation.expectedElements)
+                {
+                    LogError(R"([{}] {}: The target node #{} has {} actor(s), but the mod expects {}.)",
+                             ExtensionName, aSectorMod.mod, nodeMutation.nodeIndex,
+                             collisionNode->numActors, nodeMutation.expectedElements);
+                    nodeValidationPassed = false;
+                    continue;
+                }
+            }
+            else if (nodeMutation.nodeType == CookedCollisionNodeType)
+            {
+                auto collisionNode = Red::Cast<Red::worldCookedCollisionNode>(nodeDefinition);
+                auto innerNodes = collisionNode->GetInnerNodes();
+                if (nodeSetup.instanceIndex < innerNodes.Size())
+                {
+                    auto& innerNode = innerNodes[nodeSetup.instanceIndex];
+                    if (innerNode.numActors != nodeMutation.expectedElements)
+                    {
+                        LogError(R"([{}] {}: The target node #{} has {} actor(s), but the mod expects {}.)",
+                                 ExtensionName, aSectorMod.mod, nodeMutation.nodeIndex,
+                                 innerNode.numActors, nodeMutation.expectedElements);
+                        nodeValidationPassed = false;
+                        continue;
+                    }
+                }
+            }
+            else if (nodeMutation.nodeType == InstancedMeshNodeType)
+            {
+                auto* meshNode = Red::Cast<Red::worldInstancedMeshNode>(nodeDefinition);
+                auto instanceCount = meshNode->transformRanges[nodeSetup.instanceIndex].numTransforms;
+                if (instanceCount != nodeMutation.expectedElements)
+                {
+                    LogError(R"([{}] {}: The target node #{} has {} instance(s), but the mod expects {}.)",
+                             ExtensionName, aSectorMod.mod, nodeMutation.nodeIndex,
+                             instanceCount, nodeMutation.expectedElements);
+                    nodeValidationPassed = false;
+                    continue;
+                }
+            }
+            else if (nodeMutation.nodeType == InstancedDestructibleNodeType)
+            {
+                auto* meshNode = Red::Cast<Red::worldInstancedDestructibleMeshNode>(nodeDefinition);
+                if (meshNode->instanceTransforms.Size() != nodeMutation.expectedElements)
+                {
+                    LogError(R"([{}] {}: The target node #{} has {} instance(s), but the mod expects {}.)",
+                             ExtensionName, aSectorMod.mod, nodeMutation.nodeIndex,
+                             meshNode->instanceTransforms.Size(), nodeMutation.expectedElements);
+                    nodeValidationPassed = false;
+                    continue;
+                }
+            }
         }
     }
 
     for (const auto& nodeDeletion : aSectorMod.nodeDeletions)
     {
-        auto* nodeSetup = buffer.nodeSetups.GetInstance(nodeDeletion.nodeIndex);
-        auto* nodeDefinition = ResolveNode(buffer, nodeSetup);
-
-        if (!nodeDefinition)
-        {
-            LogError(R"([{}] {}: The target node #{} can't be resolved (node index {} of {}).)",
-                     ExtensionName, aSectorMod.mod, nodeDeletion.nodeIndex,
-                     static_cast<uint32_t>(nodeSetup->nodeIndex), buffer.nodes.Size());
-            nodeValidationPassed = false;
-            continue;
-        }
+        auto& nodeSetup = aSector->compiled.buffer.nodeSetups.At(nodeDeletion.nodeIndex);
+        auto* nodeDefinition = aSector->compiled.nodes[nodeSetup.nodeIndex].instance;
 
         if (nodeDeletion.nodeType != nodeDefinition->GetNativeType()->name)
         {
@@ -265,10 +283,120 @@ bool App::WorldStreamingExtension::PatchSector(Red::world::StreamingSector* aSec
         // cooked), so element level edits can't be applied safely yet. Whole node edits still work.
         if (!nodeDeletion.elementDeletions.empty())
         {
-            LogError(R"([{}] {}: The target node #{} has type {}, element edits for this type are not supported on game 2.5.)",
-                     ExtensionName, aSectorMod.mod, nodeDeletion.nodeIndex, nodeDeletion.nodeType.ToString());
-            nodeValidationPassed = false;
-            continue;
+            if (nodeDeletion.nodeType == CollisionNodeType)
+            {
+                auto collisionNode = Red::Cast<Red::worldCollisionNode>(nodeDefinition);
+
+                if (collisionNode->numActors != nodeDeletion.expectedElements)
+                {
+                    LogError(R"([{}] {}: The target node #{} has {} actor(s), but the mod expects {}.)",
+                             ExtensionName, aSectorMod.mod, nodeDeletion.nodeIndex,
+                             collisionNode->numActors, nodeDeletion.expectedElements);
+                    nodeValidationPassed = false;
+                    continue;
+                }
+
+                if (!nodeDeletion.elementDeletions.empty())
+                {
+                    auto collisionData = collisionNode->GetCollisionDataView();
+
+                    for (const auto& elementDeletion : nodeDeletion.elementDeletions)
+                    {
+                        auto hasSubDeletions = false;
+
+                        if (elementDeletion.subElementIndex >= 0)
+                        {
+                            auto& actor = collisionData.actors[elementDeletion.elementIndex];
+                            if (elementDeletion.subElementIndex >= actor.numShapes)
+                            {
+                                LogError(R"([{}] {}: The target node #{} actor #{} has {} shape(s), but the mod expects {} or more.)",
+                                         ExtensionName, aSectorMod.mod, nodeDeletion.nodeIndex, elementDeletion.elementIndex,
+                                         actor.numShapes, elementDeletion.subElementIndex + 1);
+                                nodeValidationPassed = false;
+                                continue;
+                            }
+                        }
+
+                        if (hasSubDeletions)
+                        {
+                            LogWarning(R"([{}] {}: The target node #{} actor #{} shape deletions cannot be applied.)",
+                                       ExtensionName, aSectorMod.mod, nodeDeletion.nodeIndex, elementDeletion.elementIndex);
+                        }
+                    }
+                }
+            }
+            else if (nodeDeletion.nodeType == CookedCollisionNodeType)
+            {
+                auto collisionNode = Red::Cast<Red::worldCookedCollisionNode>(nodeDefinition);
+                auto innerNodes = collisionNode->GetInnerNodes();
+                if (nodeSetup.instanceIndex < innerNodes.Size())
+                {
+                    auto& innerNode = innerNodes[nodeSetup.instanceIndex];
+
+                    if (innerNode.numActors != nodeDeletion.expectedElements)
+                    {
+                        LogError(R"([{}] {}: The target node #{} has {} actor(s), but the mod expects {}.)",
+                                 ExtensionName, aSectorMod.mod, nodeDeletion.nodeIndex, innerNode.numActors,
+                                 nodeDeletion.expectedElements);
+                        nodeValidationPassed = false;
+                        continue;
+                    }
+
+                    if (!nodeDeletion.elementDeletions.empty())
+                    {
+                        auto collisionData = collisionNode->GetCollisionDataView(nodeSetup.instanceIndex);
+
+                        for (const auto& elementDeletion : nodeDeletion.elementDeletions)
+                        {
+                            auto hasSubDeletions = false;
+
+                            if (elementDeletion.subElementIndex >= 0)
+                            {
+                                auto& actor = collisionData.actors[elementDeletion.elementIndex];
+                                if (elementDeletion.subElementIndex >= actor.numShapes)
+                                {
+                                    LogError(R"([{}] {}: The target node #{} actor #{} has {} shape(s), but the mod expects {} or more.)",
+                                             ExtensionName, aSectorMod.mod, nodeDeletion.nodeIndex, elementDeletion.elementIndex,
+                                             actor.numShapes, elementDeletion.subElementIndex + 1);
+                                    nodeValidationPassed = false;
+                                    continue;
+                                }
+                            }
+
+                            if (hasSubDeletions)
+                            {
+                                LogWarning(R"([{}] {}: The target node #{} actor #{} shape deletions cannot be applied.)",
+                                           ExtensionName, aSectorMod.mod, nodeDeletion.nodeIndex, elementDeletion.elementIndex);
+                            }
+                        }
+                    }
+                }
+            }
+            else if (nodeDeletion.nodeType == InstancedMeshNodeType)
+            {
+                auto* meshNode = Red::Cast<Red::worldInstancedMeshNode>(nodeDefinition);
+                auto instanceCount = meshNode->transformRanges[nodeSetup.instanceIndex].numTransforms;
+                if (instanceCount != nodeDeletion.expectedElements)
+                {
+                    LogError(R"([{}] {}: The target node #{} has {} instance(s), but the mod expects {}.)",
+                             ExtensionName, aSectorMod.mod, nodeDeletion.nodeIndex,
+                             instanceCount, nodeDeletion.expectedElements);
+                    nodeValidationPassed = false;
+                    continue;
+                }
+            }
+            else if (nodeDeletion.nodeType == InstancedDestructibleNodeType)
+            {
+                auto* meshNode = Red::Cast<Red::worldInstancedDestructibleMeshNode>(nodeDefinition);
+                if (meshNode->instanceTransforms.Size() != nodeDeletion.expectedElements)
+                {
+                    LogError(R"([{}] {}: The target node #{} has {} instance(s), but the mod expects {}.)",
+                             ExtensionName, aSectorMod.mod, nodeDeletion.nodeIndex,
+                             meshNode->instanceTransforms.Size(), nodeDeletion.expectedElements);
+                    nodeValidationPassed = false;
+                    continue;
+                }
+            }
         }
     }
 
@@ -279,85 +407,147 @@ bool App::WorldStreamingExtension::PatchSector(Red::world::StreamingSector* aSec
 
     for (const auto& nodeMutation : aSectorMod.nodeMutations)
     {
-        auto* nodeSetup = buffer.nodeSetups.GetInstance(nodeMutation.nodeIndex);
-        auto* nodeDefinition = ResolveNode(buffer, nodeSetup);
+        auto& nodeSetup = aSector->compiled.buffer.nodeSetups.At(nodeMutation.nodeIndex);
+        auto* nodeDefinition = aSector->compiled.nodes[nodeSetup.nodeIndex].instance;
 
         if (nodeMutation.modifyPosition)
         {
-            nodeSetup->transform.position = nodeMutation.position;
+            nodeSetup.transform.position = nodeMutation.position;
         }
 
         if (nodeMutation.modifyOrientation)
         {
-            nodeSetup->transform.orientation = nodeMutation.orientation;
+            nodeSetup.transform.orientation = nodeMutation.orientation;
         }
 
         if (nodeMutation.modifyScale)
         {
-            nodeSetup->scale = nodeMutation.scale;
+            nodeSetup.scale = nodeMutation.scale;
         }
 
         if (nodeMutation.modifyResource)
         {
-            if (auto* meshDefinition = Red::Cast<Red::worldMeshNode>(nodeDefinition))
+            if (auto* meshNode = Red::Cast<Red::worldMeshNode>(nodeDefinition))
             {
-                meshDefinition->mesh.path = nodeMutation.resourcePath;
+                meshNode->mesh.path = nodeMutation.resourcePath;
             }
-            else if (auto* entityDefinition = Red::Cast<Red::worldEntityNode>(nodeDefinition))
+            else if (auto* instancedMeshNode = Red::Cast<Red::worldInstancedMeshNode>(nodeDefinition))
             {
-                entityDefinition->entityTemplate.path = nodeMutation.resourcePath;
+                if (nodeSetup.instanceIndex < instancedMeshNode->cookedInstances.Size())
+                {
+                    instancedMeshNode->cookedInstances[nodeSetup.instanceIndex].mesh.path = nodeMutation.resourcePath;
+                }
             }
-            else if (auto* effectDefinition = Red::Cast<Red::worldEffectNode>(nodeDefinition))
+            else if (auto* cookedMeshNode = Red::Cast<Red::worldCookedStaticMeshNode>(nodeDefinition))
             {
-                effectDefinition->effect.path = nodeMutation.resourcePath;
+                auto innerNodes = cookedMeshNode->GetInnerNodes();
+                if (nodeSetup.instanceIndex < innerNodes.Size())
+                {
+                    innerNodes[nodeSetup.instanceIndex].mesh.path = nodeMutation.resourcePath;
+                }
             }
-            else if (auto* decalDefinition = Red::Cast<Red::worldStaticDecalNode>(nodeDefinition))
+            else if (auto* cookedDecalNode = Red::Cast<Red::worldCookedStaticDecalNode>(nodeDefinition))
             {
-                decalDefinition->material.path = nodeMutation.resourcePath;
+                auto innerNodes = cookedDecalNode->GetInnerNodes();
+                if (nodeSetup.instanceIndex < innerNodes.Size())
+                {
+                    innerNodes[nodeSetup.instanceIndex].material.path = nodeMutation.resourcePath;
+                }
             }
-            else if (auto* physicalDefinition = Red::Cast<Red::worldPhysicalDestructionNode>(nodeDefinition))
+            else if (auto* cookedProxyNode = Red::Cast<Red::worldCookedGenericProxyMeshNode>(nodeDefinition))
             {
-                physicalDefinition->mesh.path = nodeMutation.resourcePath;
+                auto innerNodes = cookedProxyNode->GetInnerNodes();
+                if (nodeSetup.instanceIndex < innerNodes.Size())
+                {
+                    innerNodes[nodeSetup.instanceIndex].mesh.path = nodeMutation.resourcePath;
+                }
             }
-            else if (auto* staticOccluderDefinition = Red::Cast<Red::worldStaticOccluderMeshNode>(nodeDefinition))
+            else if (auto* cookedAcousticNode = Red::Cast<Red::worldCookedAcousticSectorNode>(nodeDefinition))
             {
-                staticOccluderDefinition->mesh.path = nodeMutation.resourcePath;
+                auto innerNodes = cookedAcousticNode->GetInnerNodes();
+                if (nodeSetup.instanceIndex < innerNodes.Size())
+                {
+                    innerNodes[nodeSetup.instanceIndex].data.path = nodeMutation.resourcePath;
+                }
             }
-            else if (auto* instancedOccluderDefinition = Red::Cast<Red::worldInstancedOccluderNode>(nodeDefinition))
+            else if (auto* entityNode = Red::Cast<Red::worldEntityNode>(nodeDefinition))
             {
-                instancedOccluderDefinition->mesh.path = nodeMutation.resourcePath;
+                entityNode->entityTemplate.path = nodeMutation.resourcePath;
             }
-            else if (auto* foliageDefinition = Red::Cast<Red::worldFoliageNode>(nodeDefinition))
+            else if (auto* effectNode = Red::Cast<Red::worldEffectNode>(nodeDefinition))
             {
-                foliageDefinition->mesh.path = nodeMutation.resourcePath;
+                effectNode->effect.path = nodeMutation.resourcePath;
             }
-            else if (auto* terrainDefinition = Red::Cast<Red::worldTerrainMeshNode>(nodeDefinition))
+            else if (auto* decalNode = Red::Cast<Red::worldStaticDecalNode>(nodeDefinition))
             {
-                terrainDefinition->meshRef.path = nodeMutation.resourcePath;
+                decalNode->material.path = nodeMutation.resourcePath;
+            }
+            else if (auto* physicalDestructionNode = Red::Cast<Red::worldPhysicalDestructionNode>(nodeDefinition))
+            {
+                physicalDestructionNode->mesh.path = nodeMutation.resourcePath;
+            }
+            else if (auto* staticOccluderNode = Red::Cast<Red::worldStaticOccluderMeshNode>(nodeDefinition))
+            {
+                staticOccluderNode->mesh.path = nodeMutation.resourcePath;
+            }
+            else if (auto* instancedOccluderNode = Red::Cast<Red::worldInstancedOccluderNode>(nodeDefinition))
+            {
+                instancedOccluderNode->mesh.path = nodeMutation.resourcePath;
+            }
+            else if (auto* foliageNode = Red::Cast<Red::worldFoliageNode>(nodeDefinition))
+            {
+                foliageNode->mesh.path = nodeMutation.resourcePath;
+            }
+            else if (auto* terrainMeshNode = Red::Cast<Red::worldTerrainMeshNode>(nodeDefinition))
+            {
+                terrainMeshNode->meshRef.path = nodeMutation.resourcePath;
             }
         }
 
         if (nodeMutation.modifyAppearance)
         {
-            if (auto* meshDefinition = Red::Cast<Red::worldMeshNode>(nodeDefinition))
+            if (auto* meshNode = Red::Cast<Red::worldMeshNode>(nodeDefinition))
             {
-                meshDefinition->meshAppearance = nodeMutation.appearanceName;
+                meshNode->meshAppearance = nodeMutation.appearanceName;
             }
-            else if (auto* entityDefinition = Red::Cast<Red::worldEntityNode>(nodeDefinition))
+            else if (auto* instancedMeshNode = Red::Cast<Red::worldInstancedMeshNode>(nodeDefinition))
             {
-                entityDefinition->appearanceName = nodeMutation.appearanceName;
+                if (nodeSetup.instanceIndex < instancedMeshNode->cookedInstances.Size())
+                {
+                    instancedMeshNode->cookedInstances[nodeSetup.instanceIndex].meshAppearance = nodeMutation.appearanceName;
+                }
             }
-            else if (auto* spawnerDefinition = Red::Cast<Red::worldPopulationSpawnerNode>(nodeDefinition))
+            else if (auto* cookedMeshNode = Red::Cast<Red::worldCookedStaticMeshNode>(nodeDefinition))
             {
-                spawnerDefinition->appearanceName = nodeMutation.appearanceName;
+                auto innerNodes = cookedMeshNode->GetInnerNodes();
+                if (nodeSetup.instanceIndex < innerNodes.Size())
+                {
+                    innerNodes[nodeSetup.instanceIndex].meshAppearance = nodeMutation.appearanceName;
+                }
             }
-            else if (auto* physicalDefinition = Red::Cast<Red::worldPhysicalDestructionNode>(nodeDefinition))
+            else if (auto* cookedProxyNode = Red::Cast<Red::worldCookedGenericProxyMeshNode>(nodeDefinition))
             {
-                physicalDefinition->meshAppearance = nodeMutation.appearanceName;
+                auto innerNodes = cookedProxyNode->GetInnerNodes();
+                if (nodeSetup.instanceIndex < innerNodes.Size())
+                {
+                    innerNodes[nodeSetup.instanceIndex].meshAppearance = nodeMutation.appearanceName;
+                }
             }
-            else if (auto* foliageDefinition = Red::Cast<Red::worldFoliageNode>(nodeDefinition))
+            else if (auto* entityNode = Red::Cast<Red::worldEntityNode>(nodeDefinition))
             {
-                foliageDefinition->meshAppearance = nodeMutation.appearanceName;
+                entityNode->appearanceName = nodeMutation.appearanceName;
+            }
+            else if (auto* spawnerNode = Red::Cast<Red::worldPopulationSpawnerNode>(nodeDefinition))
+            {
+                spawnerNode->appearanceName = nodeMutation.appearanceName;
+            }
+            else if (auto* physicalDestructionNode = Red::Cast<Red::worldPhysicalDestructionNode>(nodeDefinition))
+            {
+                physicalDestructionNode->meshAppearance = nodeMutation.appearanceName;
+            }
+            else if (auto* foliageNode = Red::Cast<Red::worldFoliageNode>(nodeDefinition))
+            {
+                foliageNode->meshAppearance = nodeMutation.appearanceName;
             }
         }
 
@@ -375,41 +565,245 @@ bool App::WorldStreamingExtension::PatchSector(Red::world::StreamingSector* aSec
             {
                 proxyDefinition->nbNodesUnderProxy += nodeMutation.nbNodesUnderProxyDiff;
             }
+            else if (auto* cookedPoxyDefinition = Red::Cast<Red::worldCookedGenericProxyMeshNode>(nodeDefinition))
+            {
+                auto innerNodes = cookedPoxyDefinition->GetInnerNodes();
+                if (nodeSetup.instanceIndex < innerNodes.Size())
+                {
+                    innerNodes.At(nodeSetup.instanceIndex).nbNodesUnderProxy += nodeMutation.nbNodesUnderProxyDiff;
+                }
+            }
         }
 
+        if (!nodeMutation.elementMutations.empty())
+        {
+            if (nodeMutation.nodeType == CollisionNodeType)
+            {
+                auto* collisionNode = Red::Cast<Red::worldCollisionNode>(nodeDefinition);
+                auto collisionData = collisionNode->GetCollisionDataView();
+
+                for (const auto& elementMutation : nodeMutation.elementMutations)
+                {
+                    auto& actor = collisionData.actors[elementMutation.elementIndex];
+
+                    if (elementMutation.modifyPosition)
+                    {
+                        actor.transform.Position = elementMutation.position;
+                    }
+
+                    if (elementMutation.modifyOrientation)
+                    {
+                        actor.transform.Orientation = elementMutation.orientation;
+                    }
+                }
+
+                continue;
+            }
+
+            if (nodeMutation.nodeType == CookedCollisionNodeType)
+            {
+                auto* collisionNode = Red::Cast<Red::worldCookedCollisionNode>(nodeDefinition);
+                auto innerNodes = collisionNode->GetInnerNodes();
+
+                if (nodeSetup.instanceIndex < innerNodes.Size())
+                {
+                    auto collisionData = collisionNode->GetCollisionDataView(nodeSetup.instanceIndex);
+
+                    for (const auto& elementMutation : nodeMutation.elementMutations)
+                    {
+                        auto& actor = collisionData.actors[elementMutation.elementIndex];
+
+                        if (elementMutation.modifyPosition)
+                        {
+                            actor.transform.Position = elementMutation.position;
+                        }
+
+                        if (elementMutation.modifyOrientation)
+                        {
+                            actor.transform.Orientation = elementMutation.orientation;
+                        }
+                    }
+                }
+
+                continue;
+            }
+
+            if (nodeMutation.nodeType == InstancedMeshNodeType)
+            {
+                auto meshNode = Red::Cast<Red::worldInstancedMeshNode>(nodeDefinition);
+                auto startIndex = meshNode->transformRanges[nodeSetup.instanceIndex].transformStartIndex;
+
+                for (const auto& elementMutation : nodeMutation.elementMutations)
+                {
+                    auto& instanceTransform = meshNode->cookedWorldTransformsBuffer[startIndex + elementMutation.elementIndex];
+
+                    if (elementMutation.modifyPosition)
+                    {
+                        instanceTransform.transform.Position = elementMutation.position;
+                    }
+
+                    if (elementMutation.modifyOrientation)
+                    {
+                        instanceTransform.transform.Orientation = elementMutation.orientation;
+                    }
+
+                    if (elementMutation.modifyScale)
+                    {
+                        instanceTransform.scale = elementMutation.scale;
+                    }
+                }
+                continue;
+            }
+
+            if (nodeMutation.nodeType == InstancedDestructibleNodeType)
+            {
+                auto* meshNode = Red::Cast<Red::worldInstancedDestructibleMeshNode>(nodeDefinition);
+                auto inverseTransform = nodeSetup.transform.Inverse();
+
+                for (const auto& elementMutation : nodeMutation.elementMutations)
+                {
+                    auto& instanceTransform = meshNode->instanceTransforms[elementMutation.elementIndex];
+                    auto newTransform = nodeSetup.transform;
+
+                    if (elementMutation.modifyPosition)
+                    {
+                        newTransform.position = elementMutation.position;
+                    }
+
+                    if (elementMutation.modifyOrientation)
+                    {
+                        newTransform.orientation = elementMutation.orientation;
+                    }
+
+                    instanceTransform = newTransform * inverseTransform;
+                }
+                continue;
+            }
+        }
     }
 
     for (const auto& nodeDeletion : aSectorMod.nodeDeletions)
     {
-        auto* nodeSetup = buffer.nodeSetups.GetInstance(nodeDeletion.nodeIndex);
-        auto* nodeDefinition = ResolveNode(buffer, nodeSetup);
+        auto& nodeSetup = aSector->compiled.buffer.nodeSetups.At(nodeDeletion.nodeIndex);
+        auto* nodeDefinition = aSector->compiled.nodes[nodeSetup.nodeIndex].instance;
 
-        if (nodeDeletion.nodeType == StaticMeshNodeType)
+        if (!nodeDeletion.elementDeletions.empty())
         {
-            nodeSetup->scale.X = 0;
-            nodeSetup->scale.Y = 0;
-            nodeSetup->scale.Z = 0;
+            if (nodeDeletion.nodeType == CollisionNodeType)
+            {
+                auto* collisionNode = Red::Cast<Red::worldCollisionNode>(nodeDefinition);
+                auto collisionData = collisionNode->GetCollisionDataView();
+
+                for (const auto& elementDeletion : nodeDeletion.elementDeletions)
+                {
+                    auto& actor = collisionData.actors[elementDeletion.elementIndex];
+                    if (elementDeletion.subElementIndex >= 0 && actor.numShapes > 1)
+                    {
+                        // Unsupported on current patch.
+                    }
+                    else
+                    {
+                        actor.transform.Position.z.Bits = DelZ;
+                    }
+                }
+
+                continue;
+            }
+
+            if (nodeDeletion.nodeType == CookedCollisionNodeType)
+            {
+                auto* collisionNode = Red::Cast<Red::worldCookedCollisionNode>(nodeDefinition);
+                auto innerNodes = collisionNode->GetInnerNodes();
+
+                if (nodeSetup.instanceIndex < innerNodes.Size())
+                {
+                    auto collisionData = collisionNode->GetCollisionDataView(nodeSetup.instanceIndex);
+
+                    for (const auto& elementDeletion : nodeDeletion.elementDeletions)
+                    {
+                        auto& actor = collisionData.actors[elementDeletion.elementIndex];
+                        if (elementDeletion.subElementIndex >= 0 && actor.numShapes > 1)
+                        {
+                            // Unsupported on current patch.
+                        }
+                        else
+                        {
+                            actor.transform.Position.z.Bits = DelZ;
+                        }
+                    }
+                }
+
+                continue;
+            }
+
+            if (nodeDeletion.nodeType == InstancedMeshNodeType)
+            {
+                auto* meshNode = Red::Cast<Red::worldInstancedMeshNode>(nodeDefinition);
+                auto startIndex = meshNode->transformRanges[nodeSetup.instanceIndex].transformStartIndex;
+
+                for (const auto& elementDeletion : nodeDeletion.elementDeletions)
+                {
+                    auto& transform = meshNode->cookedWorldTransformsBuffer[startIndex + elementDeletion.elementIndex];
+                    transform.scale.X = 0;
+                    transform.scale.Y = 0;
+                    transform.scale.Z = 0;
+                }
+
+                continue;
+            }
+
+            if (nodeDeletion.nodeType == InstancedDestructibleNodeType)
+            {
+                auto* meshNode = Red::Cast<Red::worldInstancedDestructibleMeshNode>(nodeDefinition);
+
+                for (const auto& elementDeletion : nodeDeletion.elementDeletions)
+                {
+                    auto& instance = meshNode->instanceTransforms[elementDeletion.elementIndex];
+                    instance.position.Z = -2000;
+                }
+
+                continue;
+            }
+        }
+
+        if (nodeDeletion.nodeType == InstancedMeshNodeType)
+        {
+            auto* meshNode = Red::Cast<Red::worldInstancedMeshNode>(nodeDefinition);
+            auto startIndex = meshNode->transformRanges[nodeSetup.instanceIndex].transformStartIndex;
+            auto numElements = meshNode->transformRanges[nodeSetup.instanceIndex].numTransforms;
+            for (auto i = 0; i < numElements; ++i)
+            {
+                auto& transform = meshNode->cookedWorldTransformsBuffer[startIndex + i];
+                transform.scale.X = 0;
+                transform.scale.Y = 0;
+                transform.scale.Z = 0;
+            }
             continue;
         }
+
+        nodeSetup.scale.X = 0;
+        nodeSetup.scale.Y = 0;
+        nodeSetup.scale.Z = 0;
+
+        if (nodeDeletion.nodeType == StaticMeshNodeType || nodeDeletion.nodeType == CookedStaticMeshNodeType)
+        {
+            continue;
+        }
+
+        nodeSetup.node = s_dummyNode.instance;
 
         if (nodeDeletion.nodeType == AdvertisementNodeType)
         {
-            nodeSetup->scale.X = 0;
-            nodeSetup->scale.Y = 0;
-            nodeSetup->scale.Z = 0;
-            nodeSetup->node = s_dummyNode.instance;
             continue;
         }
 
-        nodeSetup->transform.position.Z = -2000;
-        nodeSetup->scale.X = 0;
-        nodeSetup->scale.Y = 0;
-        nodeSetup->scale.Z = 0;
+        nodeSetup.transform.position.Z = -2000;
+        nodeSetup.globalNodeID = 0;
 
-        nodeSetup->globalNodeID = 0;
-        // nodeSetup->proxyNodeID = 0;
-
-        nodeSetup->node = s_dummyNode.instance;
+        if (aSector->compiled.buffer.version >= 68)
+        {
+            nodeSetup.instanceIndex = -1;
+        }
     }
 
     return true;

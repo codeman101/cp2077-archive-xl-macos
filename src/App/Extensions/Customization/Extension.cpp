@@ -939,10 +939,13 @@ void App::CustomizationExtension::FixCustomizationAppearance(Red::AppearanceReso
 
         newDefinition->name = aAppearanceName;
 
-        auto meshAppearance = Red::CNamePool::Add(meshAppearanceStr.data());
-        for (auto& componentOverride : newDefinition->partsOverrides[0].componentsOverrides)
+        if (!newDefinition->partsOverrides.IsEmpty())
         {
-            componentOverride.meshAppearance = meshAppearance;
+            auto meshAppearance = Red::CNamePool::Add(meshAppearanceStr.data());
+            for (auto& componentOverride : newDefinition->partsOverrides[0].componentsOverrides)
+            {
+                componentOverride.meshAppearance = meshAppearance;
+            }
         }
 
         aResource->appearances.PushBack(newDefinition);

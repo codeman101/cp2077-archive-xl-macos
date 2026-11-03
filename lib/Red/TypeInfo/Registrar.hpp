@@ -21,6 +21,9 @@ public:
 
     static inline void RegisterDiscovered()
     {
+        // Assumed to be called at plugin bootstrap, on the game's main thread.
+        s_mainThread = GetCurrentThreadId();
+
         QueuePendingRegisterCallbacks();
         QueuePendingDescribeCallbacks();
     }
@@ -57,6 +60,13 @@ public:
         {
             s_describeCallbacks.push_back(aDescribe);
         }
+    }
+
+    static inline bool IsMainThread()
+    {
+        const auto mainThread = s_mainThread.load();
+
+        return mainThread == 0 || mainThread == GetCurrentThreadId();
     }
 
 private:
@@ -126,5 +136,6 @@ private:
 
     static inline std::vector<Callback> s_registerCallbacks;
     static inline std::vector<Callback> s_describeCallbacks;
+    static inline std::atomic<uint32_t> s_mainThread{0};
 };
 }

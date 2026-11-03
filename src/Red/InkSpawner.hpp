@@ -21,7 +21,7 @@ RED4EXT_ASSERT_OFFSET(InkSpawningRequest, rootWidget, 0x60);
 // Game 2.5: FinishAsyncSpawn reads the request from [ctx+0x10] (2.31 had it at +0x18)
 struct InkSpawningContext
 {
-    uint8_t unk00[0x10];                   // 00
+    WeakHandle<ISerializable>     unk00;   // 00
     SharedPtr<InkSpawningRequest> request; // 10
 };
 RED4EXT_ASSERT_SIZE(InkSpawningContext, 0x20);
@@ -118,6 +118,8 @@ constexpr auto SpawnFromLocal = Core::RawFunc<
 
 namespace Raw::InkSpawner
 {
+using ControllerInjectionEnabled = Core::RawPtr<Red::AddressLib::InkSpawner_ControllerInjectionEnabled, bool>;
+
 constexpr auto FinishAsyncSpawn = Core::RawFunc<
     /* addr = */ Red::AddressLib::InkSpawner_FinishAsyncSpawn,
     /* type = */ bool (*)(

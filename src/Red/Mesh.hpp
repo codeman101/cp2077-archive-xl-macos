@@ -88,6 +88,10 @@ constexpr auto LoadMaterialAsync = Core::RawFunc<
 namespace Raw::MeshAppearance
 {
 using Owner = Core::OffsetPtr<0x50, Red::CMesh*>;
+using MaterialMap = Core::OffsetPtr<0x68, Red::Map<Red::CName, Red::Handle<Red::IMaterial>>>;
+using MaterialJob = Core::OffsetPtr<0x90, Red::JobHandle>;
+using MaterialLock = Core::OffsetPtr<0x98, Red::SharedSpinLock>;
+using ForceCache = Core::OffsetPtr<0xA0, bool>;
 
 #if defined(__APPLE__)
 // Mac (R22): the handle comes back in x8 and the appearance is passed by pointer (as in Codeware's R21 prototype).

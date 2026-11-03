@@ -97,9 +97,10 @@ const std::unordered_map<uint32_t, uintptr_t>& AxlRows()
         {1396063719u, 0x4353D74}, // InkWidgetLibrary_AsyncSpawnFromExternal. Windows 0x9fb2a8. fork DB, verified there.
         {225197914u, 0x4353D74}, // InkWidgetLibrary_AsyncSpawnFromExternal: the 2.5 hash of the same function (psiberx/cp2077-archive-xl#31 re-derived it on Windows; this row is the 2.5 Mac address of the old row)
         {118698863u, 0x4353a7c}, // InkWidgetLibrary_AsyncSpawnFromLocal. Windows 0x57f26c. fork DB, verified there.
+        {2890273101u, 0x9D03E78}, // InkSpawner_ControllerInjectionEnabled. One byte, same row as Codeware (the game never sets it).
         {2342073570u, 0x4353a7c}, // InkWidgetLibrary_AsyncSpawnFromLocal: the 2.5 hash of the same function (psiberx/cp2077-archive-xl#31 re-derived it on Windows; this row is the 2.5 Mac address of the old row)
         {506278179u, 0x435424C}, // InkWidgetLibrary_SpawnFromExternal. Windows 0x9fb618. fork DB, verified there.
-        {1158555307u, 0x435413C}, // InkWidgetLibrary_SpawnFromLocal. Windows 0x57f9c0. fork DB, verified there.
+        {1158555307u, 0x435402C}, // InkWidgetLibrary_SpawnFromLocal. The 2.5 entry the game calls (0x42CE2C4, 0x42D30BC). 0x435413C is only reached when the controller flag is set.
         {3392610574u, 0x200CD00}, // ItemFactoryAppearanceChangeRequest_LoadAppearance. Windows 0x12e1a38. fork DB, verified there.
         {1291460507u, 0x200C940}, // ItemFactoryAppearanceChangeRequest_LoadTemplate. Windows 0x1387648. fork DB, verified there.
         {3659799256u, 0x20133F4}, // ItemFactoryRequest_LoadAppearance. Windows 0x5ebbf0. fork DB, verified there.
@@ -107,13 +108,13 @@ const std::unordered_map<uint32_t, uintptr_t>& AxlRows()
         {1964512489u, 0x5240250}, // JournalManager_LoadJournal. Windows 0x9522c0. fork DB, verified there.
         {3274382593u, 0x5243170}, // JournalManager_TrackQuest. Windows 0x5944fc. fork DB, verified there.
                 {1945256833u, 0x520854C}, // JournalRootFolderEntry_Initialize. Windows 0x950620. The virtual (this, a2, a3, JobQueue) that calls the loader half 0x1E7528C and tail-branches to 0x1E75660, as the Windows virtual 0x950620 calls 0x9507fc then jumps to 0x950660. R22: the fork DB row 0x1E7528C is only the first half.
-        {837162664u, 0x52360B4}, // JournalTree_ProcessJournalIndex. Windows 0x94ffcc. fork DB, verified there.
+        {2052144225u, 0x52360B4}, // JournalTree_ProcessJournalIndex. Hash is psiberx's 2.5 value; the Mac RVA is the one verified for the old hash 837162664.
         {1488657506u, 0x3F2BD00}, // Localization_LoadLipsyncs. Windows 0x112cb18. fork DB, verified there.
         {3550098299u, 0x1C2B6DC}, // Localization_LoadOnScreens. Windows 0x261018. fork DB, verified there.
         {772484645u, 0x1C2B4C8}, // Localization_LoadSubtitles. Windows 0x262090. fork DB, verified there.
         {4223669659u, 0x3fe6c94}, // Localization_LoadVoiceOvers. Windows 0x263124. fork DB, verified there.
         {240386859u, 0x323A0}, // Main. Windows 0x18d4dc0. Codeware/SDK row.
-        {3299551353u, 0x30F7C40}, // MappinSystem_GetMappinData. Windows 0x9067a0 (reads this+0x68). R22: the fork DB row 0x42A3E38 is the crossed twin; the Mac wrapper that reads this+0x68 is 0x42A3E68. Not hooked (16 byte wrapper), see FindPoiData.
+        {3603701972u, 0x30F7C40}, // MappinSystem_GetMappinData. Hash is psiberx's 2.5 value (was 3299551353). Mac RVA unchanged: reads this+0x68. Not hooked (16 byte wrapper), see FindPoiData.
         // 2.5: MappinSystem_GetPoiData (620961393) has no standalone function any more (the 4-instruction wrapper was merged into
         // 0x30F7934); it is not hooked on Mac, so the row is dropped and the hash resolves to its trap stub.
         // was {620961393u, 0x42A3E38}, // MappinSystem_GetPoiData. Windows 0x69ba6c (reads this+0x58). R22: crossed in the fork DB; the Mac wrapper that reads this+0x58 is 0x42A3E38. Not hooked (16 byte wrapper), see FindMappinData.
@@ -167,7 +168,7 @@ const std::unordered_map<uint32_t, uintptr_t>& AxlRows()
         // ImpostorComponent_OnAttach (4002093843). Windows 0x2570a70. unmapped: stays a trap (fork DB entry 0x37dcb7c unverified).
         {1693194103u, 0x43181C8}, // InkWorldLayer_UpdateComponents. Windows 0x29eebc. R22 code twin: no standalone function on the Mac; the lambda is inlined into the parallel-for job body 0x491DDB0 (Windows job body 0xC51EEC). The limit is `cmp x22,#9; b.hi` at +0x12C/+0x130. The row is read as code (WorldWidgetLimitPatch), never called. The fork DB entry 0x3da0574 was unverified.
         {2254060789u, 0x43181C8}, // InkWorldLayer_UpdateComponents: the 2.5 hash of the same function (psiberx/cp2077-archive-xl#31 re-derived it on Windows; this row is the 2.5 Mac address of the old row)
-        {1303056161u, 0x10E4FD0}, // ResourceLoader_OnUpdate. Windows 0x270acc. R22 code twin: void(ResourceLoader*), the loader's per-frame token cache maintenance, one caller (the tail call wrapper 0x21B99A8, called once per frame from 0x3D99938 like Windows 0x29329C from 0x291DF0). The fork DB entry 0x2d9766c was unverified.
+        {3955625134u, 0x10E4FD0}, // ResourceLoader_OnUpdate. Hash is psiberx's 2.5 value (was 1303056161). Mac RVA unchanged: per-frame token cache maintenance, caller 0x21B99A8.
         // ResourceSerializer_OnResourceReady (1147149338). Windows 0x235784. unmapped: stays a trap (fork DB entry 0x20ab510 unverified).
         // ResourceSerializer_PostLoad (1350901460). Windows 0x243138. unmapped: stays a trap (fork DB entry 0x21ac670 unverified).
         // TPPRepresentationComponent_IsAffectedSlot (678894266). Windows 0x9fe870. unmapped: stays a trap (fork DB entry 0x23d9df4 unverified).

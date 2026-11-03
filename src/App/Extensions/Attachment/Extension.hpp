@@ -53,6 +53,7 @@ private:
     static bool OnGetSuffixValue(Raw::AppearanceChanger::GetSuffixValuePtr aOriginalFunc,
                                  const Red::ItemID& aItemID, uint64_t a2, Red::Handle<Red::GameObject>& aOwner,
                                  const Red::TweakDBID& aSuffixRecordID, Red::CString& aResult);
+    static void* OnUpdateWithExclusiveLock(void*, void*, void*, void*);
 #endif
 
     static bool IsVisualTagActive(Red::Handle<Red::Entity>& aOwner, Red::TweakDBID aBaseSlotID, Red::CName aVisualTag,
